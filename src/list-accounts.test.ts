@@ -40,4 +40,13 @@ describe('listAccounts', () => {
       error: { code: 'domain-required', message: expect.stringContaining('domainId') },
     })
   })
+
+  it('errors clearly when the user belongs to no domain', async () => {
+    harness.adapter.setDomains([])
+    await harness.writeConfig({ environments: { prod: custodyEnvironment() } })
+    expect(await harness.call('listAccounts')).toMatchObject({
+      environment: 'prod',
+      error: { code: 'domain-required', message: expect.stringContaining('no domain') },
+    })
+  })
 })

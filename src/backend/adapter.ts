@@ -48,6 +48,7 @@ export const connectRippleCustody: Connect = async connection => {
         path: { domainId },
         query: { limit, startingAfter: cursor },
       })
+      // Cost: one ledger lookup per page and one address call per account (Custody's max page size is 100).
       // Only addresses on XRPL ledgers count as XRPL addresses.
       const xrplLedgers = new Set<string>()
       for await (const ledger of custody.api.paginate('getLedgers', { query: { limit: 100 } })) {
