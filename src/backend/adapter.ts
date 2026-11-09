@@ -16,8 +16,19 @@ export type Me = {
   domains: { id: string; alias: string; user: { id: string; alias: string; roles: string[] } }[]
 }
 
+export type AccountSummary = {
+  id: string
+  alias: string
+  addresses: { address: string; ledgerId: string }[]
+}
+
+export type AccountsPage = { accounts: AccountSummary[]; nextCursor?: string }
+
 export interface CustodyBackend {
+  /** The Environment's configured default domain, if any. */
+  readonly domainId?: string
   getMe(): Promise<Me>
+  listAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<AccountsPage>
 }
 
 export type Connect = (connection: CustodyConnection) => Promise<CustodyBackend>
@@ -31,6 +42,28 @@ export const connectRippleCustody: Connect = async connection => {
     allowRawSigning: connection.allowRawSigning,
   })
   return {
+    domainId: connection.domainId,
+    listAccounts: async ({ domainId, limit, cursor }) => {
+      const page = await custody.api.call('getAccounts', {
+        path: { domainId },
+        query: { limit, startingAfter: cursor },
+      })
+      const accounts: AccountSummary[] = []
+      for (const item of page.items) {
+        const addresses = await custody.api.call('getAddresses', {
+          path: { domainId, accountId: item.data.id },
+          query: { limit: 100 },
+        })
+        accounts.push({
+          id: item.data.id,
+          alias: item.data.alias,
+          addresses: addresses.items
+            .filter(entry => entry.data.scope === 'External')
+            .map(entry => ({ address: entry.data.address, ledgerId: entry.data.ledgerId })),
+        })
+      }
+      return page.nextStartingAfter ? { accounts, nextCursor: page.nextStartingAfter } : { accounts }
+    },
     getMe: async () => {
       const me = await custody.api.call('getMe')
       return {
