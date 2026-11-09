@@ -14,7 +14,7 @@ export type ToolError = { code: string; message: string }
 /** Every result names the Environment it came from. */
 export type EnvResult<T> = ({ environment: string } & T) | { environment: string | null; error: ToolError }
 
-class ToolFailure extends Error {
+export class ToolFailure extends Error {
   constructor(
     readonly code: string,
     message: string,
