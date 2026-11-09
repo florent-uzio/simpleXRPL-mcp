@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -28,6 +28,7 @@ const setup = async (connect?: Connect) => {
     'Domain ID (optional)': '',
     'Primary address': 'rPrimary',
     'Access level (read, propose, approve)': 'propose',
+    'Allow Raw signing, which Custody policies cannot inspect? (y/N)': '',
     'Private key file': keyPath,
   }
   const asked: string[] = []
@@ -45,6 +46,7 @@ describe('add-env', () => {
     const t = await setup()
     await t.run('prod')
     const raw = await readFile(t.configPath, 'utf8')
+    expect(raw).not.toContain(PEM.trim())
     expect(raw).not.toContain('abc')
     expect(JSON.parse(raw).environments.prod).toMatchObject({
       backend: 'ripple-custody',
@@ -54,6 +56,7 @@ describe('add-env', () => {
       primary: 'rPrimary',
       keyRef: 'keychain:prod',
       access: 'propose',
+      allowRawSigning: false,
     })
     expect(t.keychain.secrets.get('prod')).toBe(PEM.trim())
     expect(t.adapter.connections[0]?.signingKey).toBe(PEM.trim())
@@ -99,6 +102,33 @@ describe('add-env', () => {
     const config = JSON.parse(await readFile(t.configPath, 'utf8'))
     expect(config.defaultEnvironment).toBe('old')
     expect(Object.keys(config.environments)).toEqual(['old', 'prod'])
+  })
+
+  it('asks about Raw signing and saves the answer', async () => {
+    const t = await setup()
+    t.answers['Allow Raw signing, which Custody policies cannot inspect? (y/N)'] = 'y'
+    await t.run('prod')
+    expect(JSON.parse(await readFile(t.configPath, 'utf8')).environments.prod.allowRawSigning).toBe(true)
+  })
+
+  it('does not replace an existing Environment unless confirmed', async () => {
+    const t = await setup()
+    await t.run('prod')
+    t.keychain.secrets.set('prod', 'original')
+    const replaceQuestion = 'Environment "prod" already exists. Replace it and its Keychain key? (y/N)'
+    await expect(t.run('prod')).rejects.toThrow(/already exists/)
+    expect(t.keychain.secrets.get('prod')).toBe('original')
+    t.answers[replaceQuestion] = 'y'
+    await t.run('prod')
+    expect(t.keychain.secrets.get('prod')).toBe(PEM.trim())
+  })
+
+  it('leaves no key in the Keychain when the config cannot be written', async () => {
+    const t = await setup()
+    // A directory where the config file should go makes the final rename fail.
+    await mkdir(t.configPath)
+    await expect(t.run('prod')).rejects.toThrow()
+    expect(t.keychain.secrets.size).toBe(0)
   })
 
   it('refuses to overwrite a config file that is not valid JSON', async () => {
