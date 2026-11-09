@@ -80,3 +80,17 @@ describe('runSmoke', () => {
     expect(harness.adapter.proposals).toHaveLength(0)
   })
 })
+
+describe('parseSmokeArgs validation', () => {
+  it.each([
+    ['--timeout', '0'],
+    ['--timeout', '600'],
+    ['--timeout', 'abc'],
+    ['--amount', 'abc'],
+  ])('rejects %s %s before anything runs', (flag, value) => {
+    expect(() => parseSmokeArgs(['--env', 'dev', '--to', 'rDest', flag, value])).toThrow(flag)
+  })
+  it('rejects a flag used as a value', () => {
+    expect(() => parseSmokeArgs(['--env', '--to', 'rDest'])).toThrow(/--env needs a value/)
+  })
+})

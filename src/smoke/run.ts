@@ -9,20 +9,24 @@ export const parseSmokeArgs = (argv: string[]): SmokeArgs => {
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index]
     if (flag === '--propose') propose = true
-    else if (['--env', '--to', '--amount', '--timeout'].includes(flag)) values.set(flag, argv[++index] ?? '')
-    else throw new Error(`Unknown argument "${flag}". ${SMOKE_USAGE}`)
+    else if (['--env', '--to', '--amount', '--timeout'].includes(flag)) {
+      const value = argv[++index]
+      if (!value || value.startsWith('--')) throw new Error(`${flag} needs a value. ${SMOKE_USAGE}`)
+      values.set(flag, value)
+    } else throw new Error(`Unknown argument "${flag}". ${SMOKE_USAGE}`)
   }
   const environment = values.get('--env')
   if (!environment) throw new Error(`--env is required. ${SMOKE_USAGE}`)
   const to = values.get('--to')
   if (!to) throw new Error(`--to is required for the transfer steps. ${SMOKE_USAGE}`)
-  return {
-    environment,
-    to,
-    amount: values.get('--amount') || '1',
-    propose,
-    timeoutSeconds: Number(values.get('--timeout') || 60),
+  // Checked before any call, so a bad value can never surface after a real Propose.
+  const amount = values.get('--amount') ?? '1'
+  if (!/^\d+(\.\d{1,6})?$/.test(amount)) throw new Error(`--amount must be a decimal XRP amount. ${SMOKE_USAGE}`)
+  const timeoutSeconds = Number(values.get('--timeout') ?? 60)
+  if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 300) {
+    throw new Error(`--timeout must be a whole number of seconds from 1 to 300. ${SMOKE_USAGE}`)
   }
+  return { environment, to, amount, propose, timeoutSeconds }
 }
 
 type Call = (tool: string, args?: Record<string, unknown>) => Promise<unknown>
@@ -41,6 +45,7 @@ export const runSmoke = async ({
   log: (line: string) => void
 }): Promise<boolean> => {
   let allPassed = true
+  let pending = false
   const step = async (name: string, action: () => Promise<string>) => {
     try {
       log(`PASS  ${name}: ${await action()}`)
@@ -54,9 +59,15 @@ export const runSmoke = async ({
   /** Tools shape failures as `{ error }`: turn them into a thrown message naming the code. */
   const ok = async <T extends object>(tool: string, input: Record<string, unknown>) => {
     const result = (await call(tool, { environment: args.environment, ...input })) as T & {
-      error?: { code: string; message: string }
+      error?: { code: string; message: string } | boolean
+      message?: string
     }
-    if (result.error) throw new Error(`${result.error.code}: ${result.error.message}`)
+    if (result.error) {
+      const failure = result.error
+      throw new Error(
+        typeof failure === 'object' ? `${failure.code}: ${failure.message}` : (result.message ?? 'invalid input'),
+      )
+    }
     return result
   }
 
@@ -75,11 +86,11 @@ export const runSmoke = async ({
 
   const transfer = { to: args.to, amount: args.amount }
   const dryRunPassed = await step('xrpTransfer dry run', async () => {
-    const result = await ok<{ success: boolean; errors: string[]; estimatedFeeDrops?: string }>('xrpTransfer', {
+    const result = await ok<{ success: boolean; errors?: string[]; estimatedFeeDrops?: string }>('xrpTransfer', {
       ...transfer,
       dryRun: true,
     })
-    if (!result.success) throw new Error(`Dry run rejected: ${result.errors.join('; ')}`)
+    if (!result.success) throw new Error(`Dry run rejected: ${(result.errors ?? []).join('; ')}`)
     return `fee ${result.estimatedFeeDrops ?? 'unknown'} drops`
   })
 
@@ -95,18 +106,27 @@ export const runSmoke = async ({
       return `intentId ${intentId}`
     })
     if (intentId) {
-      await step('waitForIntent', async () => {
+      await step(`waitForIntent (intentId ${intentId}; check it with getIntent, do not propose again)`, async () => {
         const outcome = await ok<{ status?: string; isTerminal: boolean; isSuccess: boolean; reason?: string }>(
           'waitForIntent',
           { intentId, timeoutSeconds: args.timeoutSeconds },
         )
-        if (!outcome.isTerminal) return `still awaiting approval (status ${outcome.status ?? 'unknown'})`
+        if (!outcome.isTerminal) {
+          pending = true
+          return `still awaiting approval (status ${outcome.status ?? 'unknown'})`
+        }
         if (!outcome.isSuccess) throw new Error(`${outcome.status}${outcome.reason ? `: ${outcome.reason}` : ''}`)
         return `status ${outcome.status}`
       })
     }
   }
 
-  log(allPassed ? 'All steps passed.' : 'Some steps failed.')
+  log(
+    !allPassed
+      ? 'Some steps failed.'
+      : pending
+        ? 'All steps passed, but the Intent has not executed yet.'
+        : 'All steps passed.',
+  )
   return allPassed
 }
