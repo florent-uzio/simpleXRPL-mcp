@@ -1,11 +1,6 @@
 // The only module that imports `simplexrpl` (pre-1.0, pinned): everything else uses this interface.
 import { RippleCustody } from 'simplexrpl'
-
-/** Whole XRP to drops, exact (no floating point). The tool schema has already validated the format. */
-const xrpToDrops = (xrp: string) => {
-  const [whole, fraction = ''] = xrp.split('.')
-  return (BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0'))).toString()
-}
+import { xrpToDrops } from 'xrpl'
 
 export type CustodyConnection = {
   gatewayUrl: string

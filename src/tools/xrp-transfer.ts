@@ -6,7 +6,7 @@ export const createXrpTransfer = (runtime: Runtime) =>
   createTool({
     id: 'xrpTransfer',
     description:
-      'Sends XRP. Runs a Dry run first and, by default, stops there, returning the fee estimate. With `dryRun: false` it Proposes after a successful Dry run and returns the `intentId` at once; approvers act later. Needs the `propose` Access level and a named Environment.',
+      'Proposes an XRP transfer. Runs a Dry run first and, by default, stops there, returning the fee estimate. With `dryRun: false` it Proposes after a successful Dry run and returns the `intentId` at once; approvers act later. Needs the `propose` Access level and a named Environment.',
     inputSchema: z.object({
       environment: z.string().describe('Environment name; required, a write never uses the default'),
       to: z.string().describe('Destination r-address'),
