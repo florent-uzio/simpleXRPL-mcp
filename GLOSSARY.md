@@ -20,6 +20,14 @@ _Avoid_: Secret, key path
 What an Environment permits through this server: `read`, `propose` (read + Propose), or `approve` (propose + Approve/Reject).
 _Avoid_: Permission, role, mode
 
+**Domain**:
+A Ripple Custody partition that owns accounts, users and policies. An Environment may name a default Domain; without one, a user who belongs to a single Domain gets that one.
+_Avoid_: Tenant, workspace
+
+**Account**:
+A Custody account within a Domain, holding one or more addresses. Listed page by page with a cursor.
+_Avoid_: Wallet
+
 **Intent**:
 A signed proposal to change state in Ripple Custody, which takes effect only once the domain's policies are satisfied by approvals.
 _Avoid_: Transaction, order, request
