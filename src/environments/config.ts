@@ -8,7 +8,7 @@ export type AccessLevel = (typeof ACCESS_LEVELS)[number]
 
 export const KEY_REFERENCE_SCHEMES = ['keychain', 'file', 'env', 'aws-sm', 'aws-kms'] as const
 
-const environmentSchema = z.object({
+export const environmentSchema = z.object({
   backend: z.literal('ripple-custody'),
   gatewayUrl: z.url(),
   tokenUrl: z.url(),
