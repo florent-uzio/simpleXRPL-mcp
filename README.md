@@ -6,7 +6,7 @@ Requires Node.js 22.13 or later.
 
 ## Quick start
 
-1. Create an Environment (macOS, see [Setting up an Environment](#setting-up-an-environment-macos)):
+1. Create an Environment (`add-env` needs macOS; on other systems use the config file or [zero setup](#zero-setup) below; see [Setting up an Environment](#setting-up-an-environment-macos)):
 
    ```bash
    npx @florent-uzio/simplexrpl-mcp add-env <name>
@@ -30,14 +30,14 @@ Requires Node.js 22.13 or later.
 
 ## Tools
 
-| Tool               | Access level | What it does                                                                                              |
-| ------------------ | ------------ | --------------------------------------------------------------------------------------------------------- |
-| `getMcpVersion`    | none         | Reports the server version.                                                                               |
-| `listEnvironments` | none         | Lists the Environments with their Access level and Raw signing setting.                                   |
-| `getMe`            | `read`       | Returns the Environment's own Custody user.                                                               |
-| `listAccounts`     | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                   |
-| `waitForIntent`    | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error. |
-| `xrpTransfer`      | `propose`    | Dry run first (with a fee estimate), then Propose. Returns the `intentId` at once.                        |
+| Tool               | Access level | What it does                                                                                                           |
+| ------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `getMcpVersion`    | none         | Reports the server version.                                                                                            |
+| `listEnvironments` | none         | Lists the Environments with their Access level and Raw signing setting.                                                |
+| `getMe`            | `read`       | Returns the Environment's own Custody user.                                                                            |
+| `listAccounts`     | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                                |
+| `waitForIntent`    | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error.              |
+| `xrpTransfer`      | `propose`    | Dry run (default, returns the fee estimate); with `dryRun: false` it then Proposes and returns the `intentId` at once. |
 
 Write tools must name their `environment`; they never use the default.
 
@@ -64,11 +64,11 @@ An **Environment** is a named signing setup: one Backend (today only Ripple Cust
 }
 ```
 
-The config never holds a private key, only a **Key reference** (`keychain:`, `file:` or `env:`, resolved on first use; see [ADR-0002](docs/adr/0002-config-stores-key-references-per-backend.md)).
+The config never holds a private key, only a **Key reference** (`keychain:`, `file:` or `env:` are resolved today; `aws-sm:` and `aws-kms:` are accepted by the config but reserved; see [ADR-0002](docs/adr/0002-config-stores-key-references-per-backend.md)).
 
 ### Zero setup
 
-Without a config file you can set `RIPPLE_CUSTODY_GATEWAY_URL`, `RIPPLE_CUSTODY_AUTH_TOKEN_URL`, `RIPPLE_CUSTODY_AUTH_CLIENT_ID`, `RIPPLE_CUSTODY_DOMAIN_ID` (optional), `RIPPLE_CUSTODY_PRIMARY` and `RIPPLE_CUSTODY_AUTH_SIGNING_KEY`. They define a read-only Environment named `env`.
+Instead of (or alongside) a config file you can set `RIPPLE_CUSTODY_GATEWAY_URL`, `RIPPLE_CUSTODY_AUTH_TOKEN_URL`, `RIPPLE_CUSTODY_AUTH_CLIENT_ID` (optional), `RIPPLE_CUSTODY_DOMAIN_ID` (optional), `RIPPLE_CUSTODY_PRIMARY` and `RIPPLE_CUSTODY_AUTH_SIGNING_KEY`. They define a read-only Environment named `env`.
 
 ### Setting up an Environment (macOS)
 
@@ -86,7 +86,9 @@ What an Environment permits through this server:
 - `propose`: read, plus Propose (write tools such as `xrpTransfer`).
 - `approve`: propose, plus Approve and Reject.
 
-Write tools run a Dry run first and propose nothing if it fails. They return the `intentId` at once; approvers act later, so use `waitForIntent` to follow it.
+Write tools run a Dry run first and propose nothing if it fails. `xrpTransfer` only runs the Dry run unless you pass `dryRun: false`; then it returns the `intentId` at once. Approvers act later, so use `waitForIntent` to follow it.
+
+> In 0.1.0 no tool needs `approve` yet (there are no Approve or Reject tools), and no tool uses Raw signing yet. Both settings are accepted and reserved for later releases.
 
 ## Raw signing
 
