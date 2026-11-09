@@ -1,0 +1,27 @@
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+
+/** Resolves a Key reference to the private key it points at. Called lazily, at first use. */
+export const resolveKeyReference = async (
+  keyRef: string,
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<string> => {
+  const separator = keyRef.indexOf(':')
+  const scheme = keyRef.slice(0, separator)
+  const location = keyRef.slice(separator + 1)
+
+  if (scheme === 'env') {
+    const value = env[location]
+    if (!value) throw new Error(`Key reference ${keyRef}: environment variable ${location} is not set`)
+    return value
+  }
+  if (scheme === 'file') {
+    const path = location.startsWith('~/') ? homedir() + location.slice(1) : location
+    try {
+      return await readFile(path, 'utf8')
+    } catch (cause) {
+      throw new Error(`Key reference ${keyRef}: cannot read ${path} (${(cause as Error).message})`)
+    }
+  }
+  throw new Error(`Key reference ${keyRef}: the ${scheme}: scheme is not supported yet`)
+}
