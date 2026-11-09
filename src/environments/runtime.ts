@@ -7,6 +7,7 @@ import {
   type EnvironmentsConfig,
 } from './config'
 import { createHash } from 'node:crypto'
+import { macosKeychain, type Keychain } from './keychain'
 import { resolveKeyReference } from './key-reference'
 
 export type ToolError = { code: string; message: string }
@@ -26,15 +27,16 @@ export type RuntimeOptions = {
   configPath: string
   env: Readonly<Record<string, string | undefined>>
   connect: Connect
+  keychain?: Keychain
 }
 
-export const createRuntime = ({ configPath, env, connect }: RuntimeOptions) => {
+export const createRuntime = ({ configPath, env, connect, keychain = macosKeychain }: RuntimeOptions) => {
   const backends = new Map<string, { fingerprint: string; backend: Promise<CustodyBackend> }>()
 
   const connectLazily = async (name: string, settings: EnvironmentSettings) => {
     let signingKey: string
     try {
-      signingKey = await resolveKeyReference(settings.keyRef, env)
+      signingKey = await resolveKeyReference(settings.keyRef, env, keychain)
     } catch (cause) {
       throw new ToolFailure('key-reference', (cause as Error).message)
     }
