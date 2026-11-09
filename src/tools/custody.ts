@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
-import type { Runtime } from '../environments/runtime'
+import type { CustodyBackend } from '../backend/adapter'
+import { ToolFailure, type Runtime } from '../environments/runtime'
 
 export const createGetMe = (runtime: Runtime) =>
   createTool({
@@ -11,3 +12,32 @@ export const createGetMe = (runtime: Runtime) =>
     }),
     execute: ({ environment }) => runtime.run({ environment, requires: 'read' }, backend => backend.getMe()),
   })
+
+export const createListAccounts = (runtime: Runtime) =>
+  createTool({
+    id: 'listAccounts',
+    description:
+      "Lists the accounts of a domain with their XRPL addresses, one page at a time. Pass the returned `nextCursor` as `cursor` for the next page; it is absent on the last page. Uses the Environment's default domain when `domainId` is omitted.",
+    inputSchema: z.object({
+      environment: z.string().optional().describe('Environment name; the default when omitted'),
+      domainId: z.string().optional().describe("Domain id; the Environment's default domain when omitted"),
+      limit: z.number().int().min(1).max(100).optional().describe('Page size (default 100)'),
+      cursor: z.string().optional().describe('`nextCursor` of the previous page'),
+    }),
+    execute: ({ environment, domainId, limit, cursor }) =>
+      runtime.run({ environment, requires: 'read' }, async backend => {
+        const domain = domainId ?? backend.domainId ?? (await onlyDomain(backend))
+        return backend.listAccounts({ domainId: domain, limit, cursor })
+      }),
+  })
+
+const onlyDomain = async (backend: CustodyBackend) => {
+  const { domains } = await backend.getMe()
+  if (domains.length === 1) return domains[0].id
+  throw new ToolFailure(
+    'domain-required',
+    domains.length === 0
+      ? 'The user belongs to no domain.'
+      : `Several domains exist (${domains.map(domain => `${domain.alias}: ${domain.id}`).join(', ')}): pass \`domainId\`.`,
+  )
+}
