@@ -1,0 +1,58 @@
+{
+  "name": "@florent-uzio/simplexrpl-mcp",
+  "version": "0.0.0",
+  "description": "MCP server for simpleXRPL: Ripple Custody and the XRP Ledger from an AI client",
+  "license": "ISC",
+  "author": "Florent Uzio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/florent-uzio/simpleXRPL-mcp.git"
+  },
+  "type": "module",
+  "bin": {
+    "simplexrpl-mcp": "dist/simplexrpl-mcp.js"
+  },
+  "files": [
+    "dist/simplexrpl-mcp.js",
+    "dist/THIRD_PARTY_LICENSES.txt"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "keywords": [
+    "simplexrpl",
+    "xrpl",
+    "ripple-custody",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc",
+    "mcp": "tsx src/stdio.ts",
+    "build": "node scripts/build.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run format:check && npm run typecheck && npm test",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^3.0.3",
+    "@mastra/core": "^1.82.0",
+    "@mastra/mcp": "^2.8.0",
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.10",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "simplexrpl": "0.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0",
+    "zod": "^4.6.7"
+  }
+}
