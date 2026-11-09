@@ -17,6 +17,14 @@ export type Me = {
   domains: { id: string; alias: string; user: { id: string; alias: string; roles: string[] } }[]
 }
 
+export type IntentOutcome = {
+  intentId: string
+  status: string | undefined
+  isTerminal: boolean
+  isSuccess: boolean
+  reason: string | undefined
+}
+
 export type XrpTransfer = {
   to: string
   /** Decimal XRP, e.g. '10' or '0.25'. */
@@ -39,6 +47,8 @@ export interface CustodyBackend {
   /** The Environment's configured default domain, if any. */
   readonly domainId?: string
   getMe(): Promise<Me>
+  /** Follows an Intent until it ends or `timeoutMs` runs out; an Intent still awaiting approval is an outcome, not an error. */
+  waitForIntent(intentId: string, options?: { timeoutMs?: number }): Promise<IntentOutcome>
   dryRunXrpTransfer(transfer: XrpTransfer): Promise<DryRunResult>
   /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
   proposeXrpTransfer(transfer: XrpTransfer): Promise<{ intentId: string }>
@@ -118,6 +128,16 @@ export const connectRippleCustody: Connect = async connection => {
           alias: domain.alias,
           user: { id: domain.userReference.id, alias: domain.userReference.alias, roles: domain.userReference.roles },
         })),
+      }
+    },
+    waitForIntent: async (intentId, options) => {
+      const outcome = await custody.api.waitForIntent(intentId, { timeoutMs: options?.timeoutMs })
+      return {
+        intentId: outcome.intentId,
+        status: outcome.status,
+        isTerminal: outcome.isTerminal,
+        isSuccess: outcome.isSuccess,
+        reason: outcome.reason,
       }
     },
   }
