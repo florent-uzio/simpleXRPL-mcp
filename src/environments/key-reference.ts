@@ -1,6 +1,14 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import type { Keychain } from './keychain'
+import { KEYCHAIN_SERVICE, type Keychain } from './keychain'
+
+/** `keychain:<service>/<account>`; a location without a slash is an account under this server's own service. */
+export const parseKeychainLocation = (location: string) => {
+  const slash = location.indexOf('/')
+  return slash === -1
+    ? { service: KEYCHAIN_SERVICE, account: location }
+    : { service: location.slice(0, slash), account: location.slice(slash + 1) }
+}
 
 export const expandHome = (path: string) => (path.startsWith('~/') ? homedir() + path.slice(1) : path)
 
@@ -28,13 +36,14 @@ export const resolveKeyReference = async (
     }
   }
   if (scheme === 'keychain') {
+    const { service, account } = parseKeychainLocation(location)
     let value: string | undefined
     try {
-      value = await keychain.get(location)
+      value = await keychain.get(service, account)
     } catch (cause) {
       throw new Error(`Key reference ${keyRef}: cannot read the Keychain (${(cause as Error).message})`)
     }
-    if (!value) throw new Error(`Key reference ${keyRef}: no Keychain entry "${location}"`)
+    if (!value) throw new Error(`Key reference ${keyRef}: no Keychain entry "${account}" for service "${service}"`)
     return value.trim()
   }
   throw new Error(`Key reference ${keyRef}: the ${scheme}: scheme is not supported yet`)

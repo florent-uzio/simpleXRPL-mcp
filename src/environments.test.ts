@@ -30,8 +30,8 @@ describe('listEnvironments', () => {
 
   it('includes the zero-setup env Environment from RIPPLE_CUSTODY_* variables', async () => {
     await setup({
-      RIPPLE_CUSTODY_GATEWAY_URL: 'https://c.example.com',
-      RIPPLE_CUSTODY_AUTH_TOKEN_URL: 'https://c.example.com/token',
+      RIPPLE_CUSTODY_API_URL: 'https://c.example.com',
+      RIPPLE_CUSTODY_TOKEN_URL: 'https://c.example.com/token',
       RIPPLE_CUSTODY_PRIMARY: 'rPrimary',
       RIPPLE_CUSTODY_AUTH_SIGNING_KEY: 'pem',
     })
@@ -51,8 +51,8 @@ describe('listEnvironments', () => {
 describe('config problems', () => {
   it('shapes an invalid config file and still lists the zero-setup Environment', async () => {
     await setup({
-      RIPPLE_CUSTODY_GATEWAY_URL: 'https://c.example.com',
-      RIPPLE_CUSTODY_AUTH_TOKEN_URL: 'https://c.example.com/token',
+      RIPPLE_CUSTODY_API_URL: 'https://c.example.com',
+      RIPPLE_CUSTODY_TOKEN_URL: 'https://c.example.com/token',
       RIPPLE_CUSTODY_PRIMARY: 'rPrimary',
       RIPPLE_CUSTODY_AUTH_SIGNING_KEY: 'pem',
     })

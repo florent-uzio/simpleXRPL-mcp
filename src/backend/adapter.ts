@@ -1,11 +1,10 @@
 // The only module that imports `simplexrpl` (pre-1.0, pinned): everything else uses this interface.
-import { RippleCustody } from 'simplexrpl'
+import { RippleCustody, generateCustodyKeypair, type CustodyKeyAlgorithm } from 'simplexrpl'
 import { xrpToDrops } from 'xrpl'
 
 export type CustodyConnection = {
-  gatewayUrl: string
-  tokenUrl: string
-  clientId?: string
+  rippleCustodyApiUrl: string
+  rippleCustodyTokenUrl: string
   domainId?: string
   primary: string
   signingKey: string
@@ -29,8 +28,8 @@ export type XrpTransfer = {
   to: string
   /** Decimal XRP, e.g. '10' or '0.25'. */
   amount: string
-  /** Source address; the Environment's primary account when omitted. */
-  from?: string
+  /** Source r-address. */
+  from: string
 }
 
 export type DryRunResult = { success: boolean; errors: string[]; estimatedFeeDrops?: string }
@@ -59,15 +58,15 @@ export type Connect = (connection: CustodyConnection) => Promise<CustodyBackend>
 
 export const connectRippleCustody: Connect = async connection => {
   const custody = await RippleCustody.create({
-    gatewayUrl: connection.gatewayUrl,
-    auth: { tokenUrl: connection.tokenUrl, clientId: connection.clientId, signingKey: connection.signingKey },
+    gatewayUrl: connection.rippleCustodyApiUrl,
+    auth: { tokenUrl: connection.rippleCustodyTokenUrl, signingKey: connection.signingKey },
     domainId: connection.domainId,
     primary: connection.primary,
     allowRawSigning: connection.allowRawSigning,
   })
   const paymentFor = ({ to, amount, from }: XrpTransfer) => ({
     TransactionType: 'Payment' as const,
-    Account: from ?? custody.primary.address,
+    Account: from,
     Destination: to,
     Amount: xrpToDrops(amount),
   })
@@ -141,4 +140,14 @@ export const connectRippleCustody: Connect = async connection => {
       }
     },
   }
+}
+
+export type { CustodyKeyAlgorithm }
+export type Keypair = { privateKey: string; publicKey: string }
+export type GenerateKeypair = (algorithm: CustodyKeyAlgorithm) => Promise<Keypair>
+
+/** A new Ripple Custody API user key: a PKCS#8 PEM private key and the base64 public key Custody registers. */
+export const generateKeypair: GenerateKeypair = async algorithm => {
+  const { privateKey, publicKey } = await generateCustodyKeypair(algorithm)
+  return { privateKey, publicKey }
 }

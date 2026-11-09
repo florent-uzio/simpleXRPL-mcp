@@ -8,7 +8,7 @@ const setup = async (access: string = 'propose') => {
 }
 afterEach(() => harness?.cleanup())
 
-const transfer = { environment: 'prod', to: 'rDestination', amount: '10.5' }
+const transfer = { environment: 'prod', to: 'rDestination', amount: '10.5', from: 'rSource' }
 
 describe('xrpTransfer', () => {
   it('refuses a write on a read Environment before touching the Backend', async () => {
@@ -20,8 +20,17 @@ describe('xrpTransfer', () => {
 
   it('treats an omitted Environment as an input error, even when a default exists', async () => {
     await setup()
-    await expect(harness.call('xrpTransfer', { to: 'rDestination', amount: '1' })).rejects.toThrow(/environment/)
+    await expect(harness.call('xrpTransfer', { to: 'rDestination', amount: '1', from: 'rSource' })).rejects.toThrow(
+      /environment/,
+    )
     expect(harness.adapter.connections).toEqual([])
+    expect(harness.adapter.dryRuns).toEqual([])
+  })
+
+  it('requires a source address', async () => {
+    await setup()
+    const { from: _from, ...withoutFrom } = transfer
+    await expect(harness.call('xrpTransfer', withoutFrom)).rejects.toThrow(/from/)
     expect(harness.adapter.dryRuns).toEqual([])
   })
 
@@ -35,7 +44,7 @@ describe('xrpTransfer', () => {
     await setup()
     const result = await harness.call('xrpTransfer', transfer)
     expect(result).toEqual({ environment: 'prod', dryRun: true, success: true, errors: [], estimatedFeeDrops: '12' })
-    expect(harness.adapter.dryRuns).toEqual([{ to: 'rDestination', amount: '10.5' }])
+    expect(harness.adapter.dryRuns).toEqual([{ to: 'rDestination', amount: '10.5', from: 'rSource' }])
     expect(harness.adapter.proposals).toEqual([])
   })
 
@@ -57,7 +66,7 @@ describe('xrpTransfer', () => {
 
   it('Proposes after a successful Dry run and returns the intentId at once', async () => {
     await setup()
-    const result = await harness.call('xrpTransfer', { ...transfer, from: 'rSource', dryRun: false })
+    const result = await harness.call('xrpTransfer', { ...transfer, dryRun: false })
     expect(result).toEqual({ environment: 'prod', dryRun: false, intentId: 'intent-1', estimatedFeeDrops: '12' })
     expect(harness.adapter.proposals).toEqual([{ to: 'rDestination', amount: '10.5', from: 'rSource' }])
   })

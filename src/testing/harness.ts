@@ -24,8 +24,8 @@ export const createHarness = async (env: Record<string, string | undefined> = {}
 
 export const custodyEnvironment = (overrides: Record<string, unknown> = {}) => ({
   backend: 'ripple-custody',
-  gatewayUrl: 'https://custody.example.com',
-  tokenUrl: 'https://custody.example.com/token',
+  rippleCustodyApiUrl: 'https://custody.example.com',
+  rippleCustodyTokenUrl: 'https://custody.example.com/token',
   primary: 'rPrimary',
   keyRef: 'env:TEST_KEY',
   ...overrides,
