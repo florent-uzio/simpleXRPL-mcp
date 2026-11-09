@@ -4,7 +4,7 @@ import packageJson from '../../package.json'
 
 export const getMcpVersion = createTool({
   id: 'getMcpVersion',
-  description: 'Returns the version of this MCP server and of the simplexrpl package it is built on.',
+  description: 'Returns the version of this MCP server.',
   inputSchema: z.object({}),
   execute: async () => ({ mcpVersion: packageJson.version }),
 })
