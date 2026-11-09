@@ -22,3 +22,14 @@ npx @florent-uzio/simplexrpl-mcp add-env <name>
 ```
 
 Prompts for the Custody details, Access level and Raw signing opt-in, then reads the private key from a file you name. It checks the credentials with `getMe`, stores the key in the macOS Keychain (service `simplexrpl-mcp`, account `<name>`) and saves the Environment with a `keychain:<name>` Key reference. Nothing is saved if the check fails. The key is stored as `b64:<base64>`; an entry without that prefix is read as plain text.
+
+## Live smoke test
+
+Checks the real stack (config, Keychain, `simplexrpl`, Custody) against a real Environment:
+
+```bash
+npm run smoke -- --env <name> --to <rAddress> [--amount 1]            # getMe, listAccounts, Dry run
+npm run smoke -- --env <name> --to <rAddress> --amount 1 --propose    # also a real Propose + waitForIntent
+```
+
+A real Propose only happens with `--propose` and needs an Environment with the `propose` Access level. It prints one PASS/FAIL/SKIP line per step and exits non-zero on any failure; an Intent still awaiting approval counts as a pass.

@@ -34,6 +34,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc",
     "mcp": "tsx src/stdio.ts",
+    "smoke": "tsx scripts/live-smoke.ts",
     "build": "node scripts/build.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
