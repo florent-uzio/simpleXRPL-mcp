@@ -13,12 +13,12 @@ export const resolveKeyReference = async (
   if (scheme === 'env') {
     const value = env[location]
     if (!value) throw new Error(`Key reference ${keyRef}: environment variable ${location} is not set`)
-    return value
+    return value.trim()
   }
   if (scheme === 'file') {
     const path = location.startsWith('~/') ? homedir() + location.slice(1) : location
     try {
-      return await readFile(path, 'utf8')
+      return (await readFile(path, 'utf8')).trim()
     } catch (cause) {
       throw new Error(`Key reference ${keyRef}: cannot read ${path} (${(cause as Error).message})`)
     }

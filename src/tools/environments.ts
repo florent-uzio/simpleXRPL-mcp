@@ -9,9 +9,10 @@ export const createListEnvironments = (runtime: Runtime) =>
       'Lists the configured Environments with their Backend, Access level and whether raw signing is allowed. Never reads a Key reference.',
     inputSchema: z.object({}),
     execute: async () => {
-      const { defaultEnvironment, entries } = await runtime.list()
+      const { defaultEnvironment, entries, configError } = await runtime.list()
       return {
         defaultEnvironment: defaultEnvironment ?? null,
+        configError: configError ?? null,
         environments: entries.map(entry =>
           'error' in entry
             ? { name: entry.name, error: entry.error }

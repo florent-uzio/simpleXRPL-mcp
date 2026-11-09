@@ -6,6 +6,7 @@ import {
   type EnvironmentSettings,
   type EnvironmentsConfig,
 } from './config'
+import { createHash } from 'node:crypto'
 import { resolveKeyReference } from './key-reference'
 
 export type ToolError = { code: string; message: string }
@@ -30,14 +31,18 @@ export type RuntimeOptions = {
 export const createRuntime = ({ configPath, env, connect }: RuntimeOptions) => {
   const backends = new Map<string, { fingerprint: string; backend: Promise<CustodyBackend> }>()
 
-  const connectLazily = (name: string, settings: EnvironmentSettings) => {
-    const fingerprint = JSON.stringify(settings)
+  const connectLazily = async (name: string, settings: EnvironmentSettings) => {
+    let signingKey: string
+    try {
+      signingKey = await resolveKeyReference(settings.keyRef, env)
+    } catch (cause) {
+      throw new ToolFailure('key-reference', (cause as Error).message)
+    }
+    // The key is part of the fingerprint, so a changed key file reconnects even when the settings are the same.
+    const fingerprint = createHash('sha256').update(JSON.stringify({ settings, signingKey })).digest('hex')
     const cached = backends.get(name)
     if (cached?.fingerprint === fingerprint) return cached.backend
-    const backend = (async () => {
-      const signingKey = await resolveKeyReference(settings.keyRef, env)
-      return connect({ ...settings, signingKey })
-    })()
+    const backend = connect({ ...settings, signingKey })
     backends.set(name, { fingerprint, backend })
     // A failed connection is not remembered: fixing the key or the config takes effect on the next call.
     backend.catch(() => backends.delete(name))
@@ -51,7 +56,7 @@ export const createRuntime = ({ configPath, env, connect }: RuntimeOptions) => {
       throw new ToolFailure(
         'environment-required',
         names.length === 0
-          ? 'No Environment is configured. Run `npx @florent-uzio/simplexrpl-mcp add-env <name>` or set the RIPPLE_CUSTODY_* variables.'
+          ? `${config.configError ? config.configError + '. ' : ''}No Environment is configured. Add one to the config file or set the RIPPLE_CUSTODY_* variables.`
           : `Several Environments exist (${names.join(', ')}): pass \`environment\`.`,
       )
     }

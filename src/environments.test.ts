@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRuntime } from './environments/runtime'
 import { createFakeAdapter, fakeMe } from './testing/fake-adapter'
@@ -47,7 +48,53 @@ describe('listEnvironments', () => {
   })
 })
 
+describe('config problems', () => {
+  it('shapes an invalid config file and still lists the zero-setup Environment', async () => {
+    await setup({
+      RIPPLE_CUSTODY_GATEWAY_URL: 'https://c.example.com',
+      RIPPLE_CUSTODY_AUTH_TOKEN_URL: 'https://c.example.com/token',
+      RIPPLE_CUSTODY_PRIMARY: 'rPrimary',
+      RIPPLE_CUSTODY_AUTH_SIGNING_KEY: 'pem',
+    })
+    await writeFile(`${harness.dir}/config.json`, '{ not json')
+    expect(await harness.call('listEnvironments')).toMatchObject({
+      configError: expect.stringContaining('not valid JSON'),
+      environments: [{ name: 'env' }],
+    })
+    expect(await harness.call('getMe')).toMatchObject({ environment: 'env', publicKey: fakeMe.publicKey })
+  })
+})
+
 describe('getMe', () => {
+  it('trims a file: key and reports an unreadable one as a key-reference error', async () => {
+    await setup()
+    const keyPath = `${harness.dir}/key.pem`
+    await writeFile(keyPath, 'pem-contents\n')
+    await harness.writeConfig({
+      environments: {
+        ok: custodyEnvironment({ keyRef: `file:${keyPath}` }),
+        broken: custodyEnvironment({ keyRef: `file:${harness.dir}/missing.pem` }),
+      },
+    })
+    expect(await harness.call('getMe', { environment: 'broken' })).toMatchObject({
+      environment: 'broken',
+      error: { code: 'key-reference' },
+    })
+    await harness.call('getMe', { environment: 'ok' })
+    expect(harness.adapter.connections[0].signingKey).toBe('pem-contents')
+  })
+
+  it('reconnects when the key changes under the same settings', async () => {
+    await setup()
+    const keyPath = `${harness.dir}/key.pem`
+    await writeFile(keyPath, 'one')
+    await harness.writeConfig({ environments: { prod: custodyEnvironment({ keyRef: `file:${keyPath}` }) } })
+    await harness.call('getMe')
+    await writeFile(keyPath, 'two')
+    await harness.call('getMe')
+    expect(harness.adapter.connections.map(c => c.signingKey)).toEqual(['one', 'two'])
+  })
+
   it('returns the user and domains, naming the Environment', async () => {
     await setup()
     await harness.writeConfig({ environments: { prod: custodyEnvironment() } })
@@ -65,7 +112,7 @@ describe('getMe', () => {
     })
     expect(await harness.call('getMe', { environment: 'broken' })).toMatchObject({
       environment: 'broken',
-      error: { code: 'backend-error', message: expect.stringContaining('MISSING') },
+      error: { code: 'key-reference', message: expect.stringContaining('MISSING') },
     })
     expect(await harness.call('getMe', { environment: 'fine' })).toMatchObject({
       environment: 'fine',

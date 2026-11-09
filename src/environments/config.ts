@@ -27,7 +27,12 @@ export type EnvironmentSettings = z.infer<typeof environmentSchema>
 /** An Environment as declared: valid settings, or the reason they are not. */
 export type EnvironmentEntry = { name: string; settings: EnvironmentSettings } | { name: string; error: string }
 
-export type EnvironmentsConfig = { defaultEnvironment?: string; entries: EnvironmentEntry[] }
+export type EnvironmentsConfig = {
+  defaultEnvironment?: string
+  entries: EnvironmentEntry[]
+  /** Set when the config file could not be read as a whole; zero-setup Environments still load. */
+  configError?: string
+}
 
 type Env = Readonly<Record<string, string | undefined>>
 
@@ -74,23 +79,31 @@ export const loadEnvironments = async (configPath: string, env: Env): Promise<En
 
   const entries: EnvironmentEntry[] = []
   let defaultEnvironment: string | undefined
+  let configError: string | undefined
   if (raw !== undefined) {
     let json: unknown
     try {
       json = JSON.parse(raw)
     } catch {
-      throw new Error(`Config file ${configPath} is not valid JSON`)
+      configError = `Config file ${configPath} is not valid JSON`
     }
-    const file = fileSchema.safeParse(json)
-    if (!file.success) throw new Error(`Config file ${configPath} is invalid: ${z.prettifyError(file.error)}`)
-    defaultEnvironment = file.data.defaultEnvironment
-    for (const [name, value] of Object.entries(file.data.environments)) {
-      const parsed = environmentSchema.safeParse(value)
-      entries.push(parsed.success ? { name, settings: parsed.data } : { name, error: z.prettifyError(parsed.error) })
+    if (!configError) {
+      const file = fileSchema.safeParse(json)
+      if (!file.success) {
+        configError = `Config file ${configPath} is invalid: ${z.prettifyError(file.error)}`
+      } else {
+        defaultEnvironment = file.data.defaultEnvironment
+        for (const [name, value] of Object.entries(file.data.environments)) {
+          const parsed = environmentSchema.safeParse(value)
+          entries.push(
+            parsed.success ? { name, settings: parsed.data } : { name, error: z.prettifyError(parsed.error) },
+          )
+        }
+      }
     }
   }
 
   const zeroSetup = zeroSetupEntry(env)
   if (zeroSetup && !entries.some(entry => entry.name === zeroSetup.name)) entries.push(zeroSetup)
-  return { defaultEnvironment, entries }
+  return { defaultEnvironment, entries, configError }
 }
