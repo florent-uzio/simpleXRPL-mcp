@@ -72,7 +72,8 @@ describe('add-env', () => {
   })
 
   it('does not save anything when getMe itself rejects', async () => {
-    const t = await setup(async () => ({
+    const t = await setup(async connection => ({
+      ...(await createFakeAdapter().connect(connection)),
       getMe: async () => {
         throw new Error('forbidden')
       },
