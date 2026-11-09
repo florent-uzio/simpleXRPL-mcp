@@ -48,19 +48,23 @@ export const connectRippleCustody: Connect = async connection => {
         path: { domainId },
         query: { limit, startingAfter: cursor },
       })
+      // Only addresses on XRPL ledgers count as XRPL addresses.
+      const xrplLedgers = new Set<string>()
+      for await (const ledger of custody.api.paginate('getLedgers', { query: { limit: 100 } })) {
+        if (ledger.data.parameters.type === 'XRPL') xrplLedgers.add(ledger.data.id)
+      }
       const accounts: AccountSummary[] = []
       for (const item of page.items) {
-        const addresses = await custody.api.call('getAddresses', {
+        const addresses: AccountSummary['addresses'] = []
+        for await (const entry of custody.api.paginate('getAddresses', {
           path: { domainId, accountId: item.data.id },
           query: { limit: 100 },
-        })
-        accounts.push({
-          id: item.data.id,
-          alias: item.data.alias,
-          addresses: addresses.items
-            .filter(entry => entry.data.scope === 'External')
-            .map(entry => ({ address: entry.data.address, ledgerId: entry.data.ledgerId })),
-        })
+        })) {
+          if (entry.data.scope === 'External' && xrplLedgers.has(entry.data.ledgerId)) {
+            addresses.push({ address: entry.data.address, ledgerId: entry.data.ledgerId })
+          }
+        }
+        accounts.push({ id: item.data.id, alias: item.data.alias, addresses })
       }
       return page.nextStartingAfter ? { accounts, nextCursor: page.nextStartingAfter } : { accounts }
     },
