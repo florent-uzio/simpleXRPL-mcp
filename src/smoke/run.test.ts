@@ -20,17 +20,23 @@ describe('parseSmokeArgs', () => {
     expect(() => parseSmokeArgs([])).toThrow(/--env/)
   })
   it('requires a destination for the transfer steps', () => {
-    expect(() => parseSmokeArgs(['--env', 'dev'])).toThrow(/--to/)
+    expect(() => parseSmokeArgs(['--env', 'dev', '--from', 'rSource'])).toThrow(/--to/)
+  })
+  it('requires a source address for the transfer steps', () => {
+    expect(() => parseSmokeArgs(['--env', 'dev', '--to', 'rDest'])).toThrow(/--from/)
   })
   it('does not propose unless asked', () => {
-    expect(parseSmokeArgs(['--env', 'dev', '--to', 'rDest'])).toMatchObject({ propose: false, amount: '1' })
+    expect(parseSmokeArgs(['--env', 'dev', '--from', 'rSource', '--to', 'rDest'])).toMatchObject({
+      propose: false,
+      amount: '1',
+    })
   })
 })
 
 describe('runSmoke', () => {
   it('passes every step and never proposes without --propose', async () => {
     await setup()
-    const { passed, output } = await run(['--env', 'dev', '--to', 'rDest'])
+    const { passed, output } = await run(['--env', 'dev', '--from', 'rSource', '--to', 'rDest'])
     expect(passed).toBe(true)
     expect(output).toMatch(/PASS.*getMe/)
     expect(output).toMatch(/PASS.*listAccounts/)
@@ -41,9 +47,19 @@ describe('runSmoke', () => {
 
   it('proposes and waits when asked', async () => {
     await setup()
-    const { passed, output } = await run(['--env', 'dev', '--to', 'rDest', '--amount', '2', '--propose'])
+    const { passed, output } = await run([
+      '--env',
+      'dev',
+      '--from',
+      'rSource',
+      '--to',
+      'rDest',
+      '--amount',
+      '2',
+      '--propose',
+    ])
     expect(passed).toBe(true)
-    expect(harness.adapter.proposals).toEqual([{ to: 'rDest', amount: '2' }])
+    expect(harness.adapter.proposals).toEqual([{ from: 'rSource', to: 'rDest', amount: '2' }])
     expect(output).toMatch(/PASS.*propose/i)
     expect(output).toMatch(/intent-1/)
     expect(output).toMatch(/PASS.*waitForIntent/)
@@ -58,14 +74,14 @@ describe('runSmoke', () => {
       isSuccess: false,
       reason: undefined,
     }
-    const { passed, output } = await run(['--env', 'dev', '--to', 'rDest', '--propose'])
+    const { passed, output } = await run(['--env', 'dev', '--from', 'rSource', '--to', 'rDest', '--propose'])
     expect(passed).toBe(true)
     expect(output).toMatch(/awaiting approval/i)
   })
 
   it('fails a step and the run when a tool errors, without leaking the key', async () => {
     await setup('read')
-    const { passed, output } = await run(['--env', 'dev', '--to', 'rDest'])
+    const { passed, output } = await run(['--env', 'dev', '--from', 'rSource', '--to', 'rDest'])
     expect(passed).toBe(false)
     expect(output).toMatch(/FAIL.*dry run.*access-denied/i)
     expect(output).not.toContain('super-secret-key')
@@ -74,7 +90,7 @@ describe('runSmoke', () => {
   it('stops before proposing when the Dry run fails', async () => {
     await setup()
     harness.adapter.state.dryRunResult = { success: false, errors: ['insufficient funds'] }
-    const { passed, output } = await run(['--env', 'dev', '--to', 'rDest', '--propose'])
+    const { passed, output } = await run(['--env', 'dev', '--from', 'rSource', '--to', 'rDest', '--propose'])
     expect(passed).toBe(false)
     expect(output).toMatch(/FAIL.*dry run.*insufficient funds/i)
     expect(harness.adapter.proposals).toHaveLength(0)
@@ -88,9 +104,9 @@ describe('parseSmokeArgs validation', () => {
     ['--timeout', 'abc'],
     ['--amount', 'abc'],
   ])('rejects %s %s before anything runs', (flag, value) => {
-    expect(() => parseSmokeArgs(['--env', 'dev', '--to', 'rDest', flag, value])).toThrow(flag)
+    expect(() => parseSmokeArgs(['--env', 'dev', '--from', 'rSource', '--to', 'rDest', flag, value])).toThrow(flag)
   })
   it('rejects a flag used as a value', () => {
-    expect(() => parseSmokeArgs(['--env', '--to', 'rDest'])).toThrow(/--env needs a value/)
+    expect(() => parseSmokeArgs(['--env', '--from', 'rSource', '--to', 'rDest'])).toThrow(/--env needs a value/)
   })
 })

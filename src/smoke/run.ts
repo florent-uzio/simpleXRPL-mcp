@@ -1,7 +1,14 @@
-export type SmokeArgs = { environment: string; to: string; amount: string; propose: boolean; timeoutSeconds: number }
+export type SmokeArgs = {
+  environment: string
+  from: string
+  to: string
+  amount: string
+  propose: boolean
+  timeoutSeconds: number
+}
 
 export const SMOKE_USAGE =
-  'Usage: npm run smoke -- --env <name> --to <rAddress> [--amount <xrp, default 1>] [--propose] [--timeout <seconds, default 60>]'
+  'Usage: npm run smoke -- --env <name> --from <rAddress> --to <rAddress> [--amount <xrp, default 1>] [--propose] [--timeout <seconds, default 60>]'
 
 export const parseSmokeArgs = (argv: string[]): SmokeArgs => {
   const values = new Map<string, string>()
@@ -9,7 +16,7 @@ export const parseSmokeArgs = (argv: string[]): SmokeArgs => {
   for (let index = 0; index < argv.length; index++) {
     const flag = argv[index]
     if (flag === '--propose') propose = true
-    else if (['--env', '--to', '--amount', '--timeout'].includes(flag)) {
+    else if (['--env', '--from', '--to', '--amount', '--timeout'].includes(flag)) {
       const value = argv[++index]
       if (!value || value.startsWith('--')) throw new Error(`${flag} needs a value. ${SMOKE_USAGE}`)
       values.set(flag, value)
@@ -17,6 +24,8 @@ export const parseSmokeArgs = (argv: string[]): SmokeArgs => {
   }
   const environment = values.get('--env')
   if (!environment) throw new Error(`--env is required. ${SMOKE_USAGE}`)
+  const from = values.get('--from')
+  if (!from) throw new Error(`--from is required for the transfer steps. ${SMOKE_USAGE}`)
   const to = values.get('--to')
   if (!to) throw new Error(`--to is required for the transfer steps. ${SMOKE_USAGE}`)
   // Checked before any call, so a bad value can never surface after a real Propose.
@@ -26,7 +35,7 @@ export const parseSmokeArgs = (argv: string[]): SmokeArgs => {
   if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 300) {
     throw new Error(`--timeout must be a whole number of seconds from 1 to 300. ${SMOKE_USAGE}`)
   }
-  return { environment, to, amount, propose, timeoutSeconds }
+  return { environment, from, to, amount, propose, timeoutSeconds }
 }
 
 type Call = (tool: string, args?: Record<string, unknown>) => Promise<unknown>
@@ -84,7 +93,7 @@ export const runSmoke = async ({
     return `${page.accounts.length} accounts, ${addresses} XRPL addresses${page.nextCursor ? ' (more pages)' : ''}`
   })
 
-  const transfer = { to: args.to, amount: args.amount }
+  const transfer = { from: args.from, to: args.to, amount: args.amount }
   const dryRunPassed = await step('xrpTransfer dry run', async () => {
     const result = await ok<{ success: boolean; errors?: string[]; estimatedFeeDrops?: string }>('xrpTransfer', {
       ...transfer,

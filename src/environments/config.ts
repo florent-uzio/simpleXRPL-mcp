@@ -10,9 +10,8 @@ export const KEY_REFERENCE_SCHEMES = ['keychain', 'file', 'env', 'aws-sm', 'aws-
 
 export const environmentSchema = z.object({
   backend: z.literal('ripple-custody'),
-  gatewayUrl: z.url(),
-  tokenUrl: z.url(),
-  clientId: z.string().optional(),
+  rippleCustodyApiUrl: z.url(),
+  rippleCustodyTokenUrl: z.url(),
   domainId: z.string().optional(),
   primary: z.string().min(1),
   keyRef: z.string().regex(new RegExp(`^(${KEY_REFERENCE_SCHEMES.join('|')}):.+`), {
@@ -48,12 +47,11 @@ const fileSchema = z.object({
 
 /** The zero-setup Environment: built from RIPPLE_CUSTODY_* variables, read-only. */
 const zeroSetupEntry = (env: Env): EnvironmentEntry | undefined => {
-  if (!env.RIPPLE_CUSTODY_GATEWAY_URL) return undefined
+  if (!env.RIPPLE_CUSTODY_API_URL) return undefined
   const parsed = environmentSchema.safeParse({
     backend: 'ripple-custody',
-    gatewayUrl: env.RIPPLE_CUSTODY_GATEWAY_URL,
-    tokenUrl: env.RIPPLE_CUSTODY_AUTH_TOKEN_URL,
-    clientId: env.RIPPLE_CUSTODY_AUTH_CLIENT_ID,
+    rippleCustodyApiUrl: env.RIPPLE_CUSTODY_API_URL,
+    rippleCustodyTokenUrl: env.RIPPLE_CUSTODY_TOKEN_URL,
     domainId: env.RIPPLE_CUSTODY_DOMAIN_ID || undefined,
     primary: env.RIPPLE_CUSTODY_PRIMARY,
     keyRef: 'env:RIPPLE_CUSTODY_AUTH_SIGNING_KEY',

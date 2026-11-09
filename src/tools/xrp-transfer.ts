@@ -14,12 +14,12 @@ export const createXrpTransfer = (runtime: Runtime) =>
         .string()
         .regex(/^\d+(\.\d{1,6})?$/, 'a non-negative decimal XRP amount with at most 6 decimal places')
         .describe("Amount in XRP, as a decimal string, e.g. '10' or '0.25'"),
-      from: z.string().optional().describe("Source r-address; the Environment's primary account when omitted"),
+      from: z.string().describe('Source r-address, an account held in the Environment'),
       dryRun: z.boolean().default(true).describe('Only run the Dry run (default); false also Proposes'),
     }),
     execute: ({ environment, to, amount, from, dryRun }) =>
       runtime.run({ environment, requires: 'propose' }, async backend => {
-        const transfer = { to, amount, ...(from ? { from } : {}) }
+        const transfer = { to, amount, from }
         const check = await backend.dryRunXrpTransfer(transfer)
         if (dryRun) return { dryRun: true as const, ...check }
         if (!check.success) {
