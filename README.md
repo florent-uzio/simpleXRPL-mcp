@@ -96,6 +96,17 @@ Raw signing has the Backend sign an opaque, already-built transaction, which its
 
 It is **off by default** and is a per-Environment opt-in (`allowRawSigning`), chosen at `add-env` time and shown by `listEnvironments`. It is never a per-call option, so the model cannot enable it for itself. A write through Raw signing needs the `propose` Access level, and its result says the Backend's policies could not inspect it. See [ADR-0001](docs/adr/0001-raw-signing-is-a-per-environment-opt-in.md).
 
+## Live smoke test
+
+Checks the real stack (config, Keychain, `simplexrpl`, Custody) against a real Environment:
+
+```bash
+npm run smoke -- --env <name> --to <rAddress> [--amount 1]            # getMe, listAccounts, Dry run
+npm run smoke -- --env <name> --to <rAddress> --amount 1 --propose    # also a real Propose + waitForIntent
+```
+
+A real Propose only happens with `--propose` and needs an Environment with the `propose` Access level. It prints one PASS/FAIL/SKIP line per step and exits non-zero on any failure; an Intent still awaiting approval counts as a pass.
+
 ## Development
 
 ```bash
