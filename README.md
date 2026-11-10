@@ -15,7 +15,7 @@ Requires Node.js 22.13 or later.
 2. Add the server to your MCP client, for example in Claude Code:
 
    ```bash
-   claude mcp add simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp
+   claude mcp add simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp@latest
    ```
 
    or in a JSON client config:
@@ -23,7 +23,7 @@ Requires Node.js 22.13 or later.
    ```json
    {
      "mcpServers": {
-       "simplexrpl": { "command": "npx", "args": ["-y", "@florent-uzio/simplexrpl-mcp"] }
+       "simplexrpl": { "command": "npx", "args": ["-y", "@florent-uzio/simplexrpl-mcp@latest"] }
      }
    }
    ```
@@ -137,5 +137,7 @@ npm run format:check && npm run typecheck && npm test
 npm run mcp      # run the server over stdio
 npm run build    # bundle to dist/simplexrpl-mcp.js
 ```
+
+Registering the server while working in this repo? `npx @florent-uzio/simplexrpl-mcp` resolves to the local project (same package name) and fails with `command not found`, so the client reports `CONNECTION_CLOSED`. Register it with `@latest` instead (`claude mcp add simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp@latest`), or run the local build with `node dist/simplexrpl-mcp.js`.
 
 Versioning uses [Changesets](https://github.com/changesets/changesets): run `npx changeset` with each user-facing change. Merging to `main` opens a "Version Packages" PR; merging that publishes to npm through trusted publishing.
