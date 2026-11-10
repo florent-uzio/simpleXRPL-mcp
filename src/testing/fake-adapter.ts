@@ -5,6 +5,7 @@ import type {
   DryRunResult,
   IntentOutcome,
   Me,
+  MptOrder,
   XrpTransfer,
 } from '../backend/adapter'
 
@@ -25,6 +26,8 @@ export const createFakeAdapter = () => {
   const waits: { intentId: string; timeoutMs?: number }[] = []
   const dryRuns: XrpTransfer[] = []
   const proposals: XrpTransfer[] = []
+  const mptDryRuns: MptOrder[] = []
+  const mptProposals: MptOrder[] = []
   const state = {
     dryRunResult: { success: true, errors: [], estimatedFeeDrops: '12' } as DryRunResult,
     outcome: { intentId: '', status: 'Executed', isTerminal: true, isSuccess: true, reason: undefined } as
@@ -53,6 +56,14 @@ export const createFakeAdapter = () => {
         proposals.push(transfer)
         return { intentId: `intent-${proposals.length}` }
       },
+      dryRunMpt: async order => {
+        mptDryRuns.push(order)
+        return state.dryRunResult
+      },
+      proposeMpt: async order => {
+        mptProposals.push(order)
+        return { intentId: `mpt-intent-${mptProposals.length}` }
+      },
       waitForIntent: async (intentId, options) => {
         waits.push({ intentId, timeoutMs: options?.timeoutMs })
         if (state.outcome instanceof Error) throw state.outcome
@@ -63,5 +74,5 @@ export const createFakeAdapter = () => {
   const setDomains = (ids: string[]) => {
     me = { ...fakeMe, domains: ids.map(id => ({ ...fakeMe.domains[0], id, alias: id })) }
   }
-  return { connect, connections, listCalls, setDomains, dryRuns, proposals, waits, state }
+  return { connect, connections, listCalls, setDomains, dryRuns, proposals, mptDryRuns, mptProposals, waits, state }
 }

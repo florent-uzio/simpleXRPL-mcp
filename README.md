@@ -32,14 +32,18 @@ Requires Node.js 22.13 or later.
 
 ## Tools
 
-| Tool               | Access level | What it does                                                                                                           |
-| ------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `getMcpVersion`    | none         | Reports the server version.                                                                                            |
-| `listEnvironments` | none         | Lists the Environments with their Access level and Raw signing setting.                                                |
-| `getMe`            | `read`       | Returns the Environment's own Custody user.                                                                            |
-| `listAccounts`     | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                                |
-| `waitForIntent`    | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error.              |
-| `xrpTransfer`      | `propose`    | Dry run (default, returns the fee estimate); with `dryRun: false` it then Proposes and returns the `intentId` at once. |
+| Tool                 | Access level | What it does                                                                                                                                      |
+| -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getMcpVersion`      | none         | Reports the server version.                                                                                                                       |
+| `listEnvironments`   | none         | Lists the Environments with their Access level and Raw signing setting.                                                                           |
+| `getMe`              | `read`       | Returns the Environment's own Custody user.                                                                                                       |
+| `listAccounts`       | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                                                           |
+| `waitForIntent`      | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error.                                         |
+| `xrpTransfer`        | `propose`    | Dry run (default, returns the fee estimate); with `dryRun: false` it then Proposes and returns the `intentId` at once.                            |
+| `mptIssuanceCreate`  | `propose`    | Creates an MPT issuance, with XLS-89 `metadata` encoded for you. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.            |
+| `mptAuthorize`       | `propose`    | Authorizes (or, with `tfMPTUnauthorize`, deauthorizes) a holder for an MPT. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`. |
+| `mptIssuanceSet`     | `propose`    | Locks or unlocks an MPT, or enables confidential balances. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                  |
+| `mptIssuanceDestroy` | `propose`    | Destroys an MPT issuance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                   |
 
 Write tools must name their `environment`; they never use the default.
 
@@ -107,7 +111,7 @@ A generated key is kept before its public key is shown, so it is not lost if the
 What an Environment permits through this server:
 
 - `read`: read tools only (the default).
-- `propose`: read, plus Propose (write tools such as `xrpTransfer`).
+- `propose`: read, plus Propose (write tools such as `xrpTransfer` and the `mpt*` tools).
 - `approve`: propose, plus Approve and Reject.
 
 Write tools run a Dry run first and propose nothing if it fails. `xrpTransfer` only runs the Dry run unless you pass `dryRun: false`; then it returns the `intentId` at once. Approvers act later, so use `waitForIntent` to follow it.

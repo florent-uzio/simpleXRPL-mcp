@@ -1,5 +1,10 @@
 // The only module that imports `simplexrpl` (pre-1.0, pinned): everything else uses this interface.
-import { RippleCustody, generateCustodyKeypair, type CustodyKeyAlgorithm } from 'simplexrpl'
+import {
+  RippleCustody,
+  generateCustodyKeypair,
+  type CustodyKeyAlgorithm,
+  type CustodyTransactionOrder,
+} from 'simplexrpl'
 import { xrpToDrops } from 'xrpl'
 
 export type CustodyConnection = {
@@ -32,6 +37,14 @@ export type XrpTransfer = {
   from: string
 }
 
+/** A native MPT operation, sent from an XRPL address with optional memos. */
+export type MptOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos'> & {
+  operation: Extract<
+    CustodyTransactionOrder['operation'],
+    { type: 'MPTokenIssuanceCreate' | 'MPTokenAuthorize' | 'MPTokenIssuanceSet' | 'MPTokenIssuanceDestroy' }
+  >
+}
+
 export type DryRunResult = { success: boolean; errors: string[]; estimatedFeeDrops?: string }
 
 export type AccountSummary = {
@@ -51,6 +64,9 @@ export interface CustodyBackend {
   dryRunXrpTransfer(transfer: XrpTransfer): Promise<DryRunResult>
   /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
   proposeXrpTransfer(transfer: XrpTransfer): Promise<{ intentId: string }>
+  dryRunMpt(order: MptOrder): Promise<DryRunResult>
+  /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
+  proposeMpt(order: MptOrder): Promise<{ intentId: string }>
   listAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<AccountsPage>
 }
 
@@ -89,6 +105,39 @@ export const connectRippleCustody: Connect = async connection => {
           amount: payment.Amount,
         },
       })
+      return { intentId }
+    },
+    dryRunMpt: async order => {
+      // The library only dry-runs xrpl transactions, which cannot carry every native MPT flag, so build the order here.
+      const reference = await custody.api.findByAddress(order.account, {
+        ledgerId: order.ledgerId,
+        domainId: connection.domainId,
+      })
+      if (!reference) return { success: false, errors: [`No account in the Domain holds ${order.account}`] }
+      const dryRun = await custody.api.dryRun({
+        id: crypto.randomUUID(),
+        accountId: reference.accountId,
+        ledgerId: reference.ledgerId,
+        parameters: {
+          feeStrategy: { priority: 'Low', type: 'Priority' },
+          memos: [...(order.memos ?? [])],
+          operation: order.operation,
+          type: 'XRPL',
+        },
+        customProperties: {},
+        type: 'v0_CreateTransactionOrder',
+      })
+      return {
+        success: dryRun.success,
+        errors: dryRun.errors ?? [],
+        estimatedFeeDrops:
+          dryRun.type === 'v0_CreateTransactionOrder' && dryRun.estimate.type === 'XRPL'
+            ? dryRun.estimate.fee
+            : undefined,
+      }
+    },
+    proposeMpt: async order => {
+      const { intentId } = await custody.api.proposeTransactionOrder(order)
       return { intentId }
     },
     domainId: connection.domainId,
