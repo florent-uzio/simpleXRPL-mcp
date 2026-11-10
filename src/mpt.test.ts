@@ -86,6 +86,7 @@ describe('mptIssuanceCreate operation', () => {
       metadata,
     })
     const { operation } = harness.adapter.mptDryRuns[0]
+    expect(Object.keys(operation).sort()).toEqual(['assetScale', 'flags', 'metadata', 'type'])
     expect(operation).toMatchObject({
       type: 'MPTokenIssuanceCreate',
       assetScale: 2,
@@ -122,8 +123,13 @@ describe('other operations', () => {
 
   it('maps mptIssuanceSet with a lock flag', async () => {
     await setup()
-    await harness.call('mptIssuanceSet', { ...base, issuanceId: 'ABC', flags: ['tfMPTLock'] })
-    expect(harness.adapter.mptDryRuns[0].operation).toMatchObject({ type: 'MPTokenIssuanceSet', flags: ['tfMPTLock'] })
+    await harness.call('mptIssuanceSet', { ...base, issuanceId: 'ABC', flags: ['tfMPTLock'], memos: [{ data: 'x' }] })
+    expect(harness.adapter.mptDryRuns[0].operation).toEqual({
+      type: 'MPTokenIssuanceSet',
+      tokenIdentifier: { type: 'MPTokenIssuanceId', issuanceId: 'ABC' },
+      flags: ['tfMPTLock'],
+      mutableFlags: [],
+    })
   })
 
   it('maps mptIssuanceDestroy', async () => {

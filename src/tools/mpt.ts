@@ -48,7 +48,14 @@ export const createMptTool = <Shape extends z.ZodRawShape>(
     inputSchema: z.object({ ...common, ...options.shape }),
     execute: raw => {
       const input = raw as CommonInput & z.infer<z.ZodObject<Shape>>
-      const { environment: _environment, dryRun, ...rest } = input
+      const {
+        environment: _environment,
+        account: _account,
+        ledgerId: _ledgerId,
+        memos: _memos,
+        dryRun,
+        ...rest
+      } = input
       return runtime.run({ environment: input.environment, requires: 'propose' }, async backend => {
         const order: MptOrder = {
           account: input.account,
