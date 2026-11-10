@@ -7,6 +7,7 @@ import {
   type CustodyTransactionOrder,
 } from 'simplexrpl'
 import { xrpToDrops } from 'xrpl'
+import { pollUntil, type Attempt } from './poll'
 
 export type CustodyConnection = {
   rippleCustodyApiUrl: string
@@ -88,27 +89,28 @@ export type CustodyTransaction = {
   } | null
 }
 
-/** The MPT issuance ID created by an Intent, from the detailed transactions its order produced. */
-export const mptIssuanceIdOf = (intentId: string, transactions: CustodyTransaction[]): string => {
-  const ids = new Set(
-    transactions.flatMap(({ ledgerTransactionData }) => {
-      const ledgerData = ledgerTransactionData?.ledgerData
-      // Other MPT transactions carry the issuance they act on: only a create's is the one this Intent made.
-      return ledgerData?.type === 'Xrpl' &&
-        ledgerData.transactionType === 'MPTokenIssuanceCreate' &&
-        ledgerData.tokenData
-        ? [ledgerData.tokenData.issuanceId]
-        : []
-    }),
+/**
+ * The MPT issuance ID created by an Intent, from the detailed transactions its order produced.
+ * Pending until Custody has registered the transaction and filled in its ledger data; throws when it never will.
+ */
+export const mptIssuanceIdOf = (intentId: string, transactions: CustodyTransaction[]): Attempt<string> => {
+  const ledgerData = transactions.flatMap(({ ledgerTransactionData }) =>
+    ledgerTransactionData?.ledgerData?.type === 'Xrpl' ? [ledgerTransactionData.ledgerData] : [],
   )
-  if (ids.size === 1) return [...ids][0]
+  // Other MPT transactions carry the issuance they act on: only a create's is the one this Intent made.
+  const other = ledgerData.find(data => data.transactionType && data.transactionType !== 'MPTokenIssuanceCreate')
+  if (other)
+    throw new Error(`Intent ${intentId} is not an MPTokenIssuanceCreate: its transaction is ${other.transactionType}.`)
+  const ids = new Set(ledgerData.flatMap(data => (data.tokenData ? [data.tokenData.issuanceId] : [])))
   if (ids.size > 1) throw new Error(`Intent ${intentId} produced several MPT issuances: ${[...ids].join(', ')}.`)
-  if (transactions.length === 0)
-    throw new Error(`No transaction is registered yet for Intent ${intentId}. Check it executed, then retry shortly.`)
-  throw new Error(
-    `Intent ${intentId} carries no MPT issuance ID yet. Custody fills it in shortly after the Intent executes: retry shortly. If it persists, check the Intent was an MPTokenIssuanceCreate.`,
-  )
+  if (ids.size === 1) return { value: [...ids][0] }
+  return transactions.length === 0
+    ? { pending: `No transaction is registered yet for Intent ${intentId}.` }
+    : { pending: `The transaction of Intent ${intentId} carries no MPT issuance ID yet.` }
 }
+
+/** The MPT issuance an Intent created, or why it is not readable yet when the wait ran out. */
+export type MptIssuanceIdOutcome = { intentId: string; issuanceId?: string; reason?: string }
 
 export interface CustodyBackend {
   /** The Environment's configured default domain, if any. */
@@ -126,8 +128,11 @@ export interface CustodyBackend {
   /** Proposes the Batch and returns as soon as the Backend accepted it, without waiting for approvals. */
   proposeBatch(order: BatchOrder): Promise<{ intentId: string }>
   listAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<AccountsPage>
-  /** The MPT issuance ID an executed MPTokenIssuanceCreate Intent created; throws when it is not readable (yet). */
-  getMptIssuanceId(options: { intentId: string; domainId: string }): Promise<string>
+  /**
+   * Waits up to `timeoutMs` (default 30 s; 0 looks once) for the MPT issuance ID an MPTokenIssuanceCreate Intent
+   * created. Custody records it a few seconds after the Intent executes; not being there yet is an outcome, not an error.
+   */
+  getMptIssuanceId(options: { intentId: string; domainId: string; timeoutMs?: number }): Promise<MptIssuanceIdOutcome>
 }
 
 export type Connect = (connection: CustodyConnection) => Promise<CustodyBackend>
@@ -252,16 +257,20 @@ export const connectRippleCustody: Connect = async connection => {
       }
       return page.nextStartingAfter ? { accounts, nextCursor: page.nextStartingAfter } : { accounts }
     },
-    getMptIssuanceId: async ({ intentId, domainId }) => {
-      // The order id is the intentId. The list projection omits ledger data, so read each transaction in full.
-      const { items } = await custody.api.call('getTransactions', {
-        path: { domainId },
-        query: { 'orderReference.Id': intentId },
-      })
-      const transactions = await Promise.all(
-        items.map(item => custody.api.call('getTransaction', { path: { domainId, transactionId: item.id } })),
-      )
-      return mptIssuanceIdOf(intentId, transactions)
+    getMptIssuanceId: async ({ intentId, domainId, timeoutMs = 30_000 }) => {
+      const attempt = async () => {
+        // The order id is the intentId. The list projection omits ledger data, so read each transaction in full.
+        const { items } = await custody.api.call('getTransactions', {
+          path: { domainId },
+          query: { 'orderReference.Id': intentId },
+        })
+        const transactions = await Promise.all(
+          items.map(item => custody.api.call('getTransaction', { path: { domainId, transactionId: item.id } })),
+        )
+        return mptIssuanceIdOf(intentId, transactions)
+      }
+      const result = await pollUntil(attempt, { timeoutMs, intervalMs: 3000 })
+      return 'value' in result ? { intentId, issuanceId: result.value } : { intentId, reason: result.pending }
     },
     getMe: async () => {
       const me = await custody.api.call('getMe')

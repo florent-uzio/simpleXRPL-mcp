@@ -7,6 +7,7 @@ import type {
   DryRunResult,
   IntentOutcome,
   Me,
+  MptIssuanceIdOutcome,
   MptOrder,
   XrpTransfer,
 } from '../backend/adapter'
@@ -32,10 +33,10 @@ export const createFakeAdapter = () => {
   const mptProposals: MptOrder[] = []
   const batchDryRuns: BatchOrder[] = []
   const batchProposals: BatchOrder[] = []
-  const issuanceLookups: { intentId: string; domainId: string }[] = []
+  const issuanceLookups: { intentId: string; domainId: string; timeoutMs?: number }[] = []
   const state = {
     batchSigners: [] as BatchSigningRequirement[],
-    issuanceId: 'ISSUANCE-1' as string | Error,
+    issuance: { issuanceId: 'ISSUANCE-1' } as Omit<MptIssuanceIdOutcome, 'intentId'> | Error,
     dryRunResult: { success: true, errors: [], estimatedFeeDrops: '12' } as DryRunResult,
     outcome: { intentId: '', status: 'Executed', isTerminal: true, isSuccess: true, reason: undefined } as
       IntentOutcome | Error,
@@ -81,8 +82,8 @@ export const createFakeAdapter = () => {
       },
       getMptIssuanceId: async lookup => {
         issuanceLookups.push(lookup)
-        if (state.issuanceId instanceof Error) throw state.issuanceId
-        return state.issuanceId
+        if (state.issuance instanceof Error) throw state.issuance
+        return { ...state.issuance, intentId: lookup.intentId }
       },
       waitForIntent: async (intentId, options) => {
         waits.push({ intentId, timeoutMs: options?.timeoutMs })

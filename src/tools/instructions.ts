@@ -10,7 +10,7 @@ export const INSTRUCTIONS = `
     - Write tools (xrpTransfer, mptIssuanceCreate, mptAuthorize, mptIssuanceSet, mptIssuanceDestroy, confidentialMptConvert, confidentialMptConvertBack, confidentialMptMergeInbox, sponsorshipSetAsSponsor, sponsorshipSetAsSponsee, proposeBatch) need an Environment with the \`propose\` Access level, and must name their \`environment\`: they never use the default.
     - They run a Dry run first. By default they stop there and return the fee estimate; pass \`dryRun: false\` to Propose, which happens only if the Dry run succeeded.
     - A Propose returns the \`intentId\` at once: approvers act later, so a pending Intent is not an error.
-    - Once an mptIssuanceCreate Intent is executed, get the new token's \`issuanceId\` with getMptIssuanceId: Custody records it a few seconds after execution, so retry if it is not there yet.
+    - Once an mptIssuanceCreate Intent is executed, get the new token's \`issuanceId\` with getMptIssuanceId. It waits for Custody to record it; if the answer has only a \`reason\`, call it again.
     - A Batch needs a signature from each of its signers: \`dryRunBatch\` lists them, but this server cannot sign for them yet, so \`proposeBatch\` takes their \`batchSigners\` from you.
     - Never Propose the same Intent again because a result looks incomplete.
 `

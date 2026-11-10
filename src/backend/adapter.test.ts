@@ -21,23 +21,29 @@ const executedIssuanceCreate = {
 
 describe('mptIssuanceIdOf', () => {
   it('reads the issuance ID off an executed MPTokenIssuanceCreate', () => {
-    expect(mptIssuanceIdOf('i-1', [executedIssuanceCreate])).toBe('002E70E727A7571C7691CE271B3C5B3ADA0BDFA09EF1C5F3')
+    expect(mptIssuanceIdOf('i-1', [executedIssuanceCreate])).toEqual({
+      value: '002E70E727A7571C7691CE271B3C5B3ADA0BDFA09EF1C5F3',
+    })
   })
 
-  it('says to retry when no transaction is registered yet', () => {
-    expect(() => mptIssuanceIdOf('i-1', [])).toThrow('No transaction is registered yet for Intent i-1')
+  it('is pending while no transaction is registered', () => {
+    expect(mptIssuanceIdOf('i-1', [])).toEqual({ pending: 'No transaction is registered yet for Intent i-1.' })
   })
 
-  it('says to retry when the ledger data is not filled in yet', () => {
+  it('is pending while the ledger data is not filled in', () => {
     const pending = { ...executedIssuanceCreate, ledgerTransactionData: { ledgerStatus: 'Pending', ledgerData: null } }
-    expect(() => mptIssuanceIdOf('i-1', [pending])).toThrow('Intent i-1 carries no MPT issuance ID yet')
+    expect(mptIssuanceIdOf('i-1', [pending])).toEqual({
+      pending: 'The transaction of Intent i-1 carries no MPT issuance ID yet.',
+    })
   })
 
   it('rejects a transaction that created no issuance', () => {
     const payment = {
       ledgerTransactionData: { ledgerData: { transactionType: 'Payment', type: 'Xrpl' } },
     }
-    expect(() => mptIssuanceIdOf('i-1', [payment])).toThrow('check the Intent was an MPTokenIssuanceCreate')
+    expect(() => mptIssuanceIdOf('i-1', [payment])).toThrow(
+      'Intent i-1 is not an MPTokenIssuanceCreate: its transaction is Payment.',
+    )
   })
 
   it('ignores the issuance of an MPT transaction that did not create it', () => {
@@ -46,7 +52,9 @@ describe('mptIssuanceIdOf', () => {
         ledgerData: { ...executedIssuanceCreate.ledgerTransactionData.ledgerData, transactionType: 'MPTokenAuthorize' },
       },
     }
-    expect(() => mptIssuanceIdOf('i-1', [authorize])).toThrow('check the Intent was an MPTokenIssuanceCreate')
+    expect(() => mptIssuanceIdOf('i-1', [authorize])).toThrow(
+      'Intent i-1 is not an MPTokenIssuanceCreate: its transaction is MPTokenAuthorize.',
+    )
   })
 
   it('refuses to pick between several issuances', () => {
