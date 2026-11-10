@@ -32,18 +32,21 @@ Requires Node.js 22.13 or later.
 
 ## Tools
 
-| Tool                 | Access level | What it does                                                                                                                                      |
-| -------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getMcpVersion`      | none         | Reports the server version.                                                                                                                       |
-| `listEnvironments`   | none         | Lists the Environments with their Access level and Raw signing setting.                                                                           |
-| `getMe`              | `read`       | Returns the Environment's own Custody user.                                                                                                       |
-| `listAccounts`       | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                                                           |
-| `waitForIntent`      | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error.                                         |
-| `xrpTransfer`        | `propose`    | Dry run (default, returns the fee estimate); with `dryRun: false` it then Proposes and returns the `intentId` at once.                            |
-| `mptIssuanceCreate`  | `propose`    | Creates an MPT issuance, with XLS-89 `metadata` encoded for you. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.            |
-| `mptAuthorize`       | `propose`    | Authorizes (or, with `tfMPTUnauthorize`, deauthorizes) a holder for an MPT. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`. |
-| `mptIssuanceSet`     | `propose`    | Locks or unlocks an MPT, or enables confidential balances. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                  |
-| `mptIssuanceDestroy` | `propose`    | Destroys an MPT issuance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                   |
+| Tool                         | Access level | What it does                                                                                                                                                           |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getMcpVersion`              | none         | Reports the server version.                                                                                                                                            |
+| `listEnvironments`           | none         | Lists the Environments with their Access level and Raw signing setting.                                                                                                |
+| `getMe`                      | `read`       | Returns the Environment's own Custody user.                                                                                                                            |
+| `listAccounts`               | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                                                                                |
+| `waitForIntent`              | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error.                                                              |
+| `xrpTransfer`                | `propose`    | Dry run (default, returns the fee estimate); with `dryRun: false` it then Proposes and returns the `intentId` at once.                                                 |
+| `mptIssuanceCreate`          | `propose`    | Creates an MPT issuance, with XLS-89 `metadata` encoded for you. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                 |
+| `mptAuthorize`               | `propose`    | Authorizes (or, with `tfMPTUnauthorize`, deauthorizes) a holder for an MPT. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                      |
+| `mptIssuanceSet`             | `propose`    | Locks or unlocks an MPT, or enables confidential balances. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                       |
+| `mptIssuanceDestroy`         | `propose`    | Destroys an MPT issuance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                                        |
+| `confidentialMptConvert`     | `propose`    | Converts public MPT into the confidential balance; a holder's first convert must be zero-amount. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`. |
+| `confidentialMptConvertBack` | `propose`    | Converts confidential MPT back into the public balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                          |
+| `confidentialMptMergeInbox`  | `propose`    | Merges the confidential inbox into the confidential balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                     |
 
 Write tools must name their `environment`; they never use the default.
 

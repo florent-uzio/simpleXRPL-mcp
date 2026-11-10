@@ -41,7 +41,16 @@ export type XrpTransfer = {
 export type MptOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos'> & {
   operation: Extract<
     CustodyTransactionOrder['operation'],
-    { type: 'MPTokenIssuanceCreate' | 'MPTokenAuthorize' | 'MPTokenIssuanceSet' | 'MPTokenIssuanceDestroy' }
+    {
+      type:
+        | 'MPTokenIssuanceCreate'
+        | 'MPTokenAuthorize'
+        | 'MPTokenIssuanceSet'
+        | 'MPTokenIssuanceDestroy'
+        | 'ConfidentialMPTConvert'
+        | 'ConfidentialMPTConvertBack'
+        | 'ConfidentialMPTMergeInbox'
+    }
   >
 }
 
