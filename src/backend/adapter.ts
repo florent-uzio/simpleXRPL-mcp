@@ -58,6 +58,12 @@ export type MptOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'm
   >
 }
 
+/** A native Payment of XRP, an IOU, an MPT or a Custody ticker, with the order fields simplexrpl passes on. */
+export type PaymentOrder = Pick<
+  CustodyTransactionOrder,
+  'account' | 'ledgerId' | 'memos' | 'sourceTag' | 'maximumFee' | 'feeStrategy'
+> & { operation: Extract<CustodyTransactionOrder['operation'], { type: 'Payment' }> }
+
 type BatchOperation = Extract<CustodyTransactionOrder['operation'], { type: 'Batch' }>
 
 /** A native Batch, sent from the submitter's XRPL address. `batchSigners` is empty for a Dry run. */
@@ -124,6 +130,9 @@ export interface CustodyBackend {
   dryRunMpt(order: MptOrder): Promise<DryRunResult>
   /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
   proposeMpt(order: MptOrder): Promise<{ intentId: string }>
+  dryRunPayment(order: PaymentOrder): Promise<DryRunResult>
+  /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
+  proposePayment(order: PaymentOrder): Promise<{ intentId: string }>
   dryRunBatch(order: BatchOrder): Promise<BatchDryRunResult>
   /** Proposes the Batch and returns as soon as the Backend accepted it, without waiting for approvals. */
   proposeBatch(order: BatchOrder): Promise<{ intentId: string }>
@@ -153,7 +162,10 @@ export const connectRippleCustody: Connect = async connection => {
   })
   // The library only dry-runs xrpl transactions, which cannot carry every native operation, so build the order here.
   const dryRunNative = async (
-    order: Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos' | 'operation'>,
+    order: Pick<
+      CustodyTransactionOrder,
+      'account' | 'ledgerId' | 'memos' | 'operation' | 'sourceTag' | 'maximumFee' | 'feeStrategy'
+    >,
   ): Promise<CustodyTransactionDryRun | undefined> => {
     const reference = await custody.api.findByAddress(order.account, {
       ledgerId: order.ledgerId,
@@ -165,7 +177,10 @@ export const connectRippleCustody: Connect = async connection => {
       accountId: reference.accountId,
       ledgerId: reference.ledgerId,
       parameters: {
-        feeStrategy: { priority: 'Low', type: 'Priority' },
+        // Same defaults as proposeTransactionOrder, so the Dry run checks the order that would be proposed.
+        feeStrategy: order.feeStrategy ?? { priority: 'Low', type: 'Priority' },
+        maximumFee: order.maximumFee,
+        sourceTag: order.sourceTag,
         memos: [...(order.memos ?? [])],
         operation: order.operation,
         type: 'XRPL',
@@ -207,6 +222,14 @@ export const connectRippleCustody: Connect = async connection => {
     dryRunMpt: async order => {
       const dryRun = await dryRunNative(order)
       return dryRun ? summarize(dryRun) : noAccount(order.account)
+    },
+    dryRunPayment: async order => {
+      const dryRun = await dryRunNative(order)
+      return dryRun ? summarize(dryRun) : noAccount(order.account)
+    },
+    proposePayment: async order => {
+      const { intentId } = await custody.api.proposeTransactionOrder(order)
+      return { intentId }
     },
     dryRunBatch: async order => {
       const dryRun = await dryRunNative(order)
