@@ -11,6 +11,7 @@ export const INSTRUCTIONS = `
     - They run a Dry run first. By default they stop there and return the fee estimate; pass \`dryRun: false\` to Propose, which happens only if the Dry run succeeded.
     - \`payment\` sends XRP, an IOU, an MPT or a Custody ticker. The destination must already hold a trust line for an IOU, or have run \`mptAuthorize\` for an MPT (or the issuer authorized it, when the issuance requires auth); the issuer itself needs neither.
     - A Propose returns the \`intentId\` at once: approvers act later, so a pending Intent is not an error.
+    - Once an mptIssuanceCreate Intent is executed, get the new token's \`issuanceId\` with getMptIssuanceId. It waits for Custody to record it; if the answer has only a \`reason\`, call it again.
     - A Batch needs a signature from each of its signers: \`dryRunBatch\` lists them, but this server cannot sign for them yet, so \`proposeBatch\` takes their \`batchSigners\` from you.
     - Never Propose the same Intent again because a result looks incomplete.
 `

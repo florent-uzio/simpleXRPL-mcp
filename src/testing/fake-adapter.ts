@@ -7,6 +7,7 @@ import type {
   DryRunResult,
   IntentOutcome,
   Me,
+  MptIssuanceIdOutcome,
   MptOrder,
   PaymentOrder,
   XrpTransfer,
@@ -35,8 +36,10 @@ export const createFakeAdapter = () => {
   const paymentProposals: PaymentOrder[] = []
   const batchDryRuns: BatchOrder[] = []
   const batchProposals: BatchOrder[] = []
+  const issuanceLookups: { intentId: string; domainId: string; timeoutMs?: number }[] = []
   const state = {
     batchSigners: [] as BatchSigningRequirement[],
+    issuance: { issuanceId: 'ISSUANCE-1' } as Omit<MptIssuanceIdOutcome, 'intentId'> | Error,
     dryRunResult: { success: true, errors: [], estimatedFeeDrops: '12' } as DryRunResult,
     outcome: { intentId: '', status: 'Executed', isTerminal: true, isSuccess: true, reason: undefined } as
       IntentOutcome | Error,
@@ -88,6 +91,11 @@ export const createFakeAdapter = () => {
         batchProposals.push(order)
         return { intentId: `batch-intent-${batchProposals.length}` }
       },
+      getMptIssuanceId: async lookup => {
+        issuanceLookups.push(lookup)
+        if (state.issuance instanceof Error) throw state.issuance
+        return { ...state.issuance, intentId: lookup.intentId }
+      },
       waitForIntent: async (intentId, options) => {
         waits.push({ intentId, timeoutMs: options?.timeoutMs })
         if (state.outcome instanceof Error) throw state.outcome
@@ -112,6 +120,7 @@ export const createFakeAdapter = () => {
     batchDryRuns,
     batchProposals,
     waits,
+    issuanceLookups,
     state,
   }
 }
