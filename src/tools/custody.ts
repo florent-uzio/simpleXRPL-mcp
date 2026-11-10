@@ -36,6 +36,35 @@ export const createWaitForIntent = (runtime: Runtime) =>
         }),
       ),
   })
+
+export const createGetMptIssuanceId = (runtime: Runtime) =>
+  createTool({
+    id: 'getMptIssuanceId',
+    description:
+      "Returns the MPT issuance ID an executed mptIssuanceCreate Intent created, for mptAuthorize, mptIssuanceSet, mptIssuanceDestroy and the confidential MPT tools. Custody records it a few seconds after the Intent executes, so this waits for it. If the wait ends first, the answer has a `reason` and no `issuanceId`: that is not an error, call again with the same intentId. Uses the Environment's default domain when `domainId` is omitted.",
+    inputSchema: z.object({
+      intentId: z.string().describe('The id returned when the mptIssuanceCreate Intent was proposed'),
+      timeoutSeconds: z
+        .number()
+        .int()
+        .min(0)
+        .max(300)
+        .optional()
+        .describe('How long to wait for the ID (default 30); 0 looks once'),
+      environment: z.string().optional().describe('Environment name; the default when omitted'),
+      domainId: z.string().optional().describe("Domain id; the Environment's default domain when omitted"),
+    }),
+    execute: ({ intentId, timeoutSeconds, environment, domainId }) =>
+      runtime.run({ environment, requires: 'read' }, async backend => {
+        const domain = domainId ?? backend.domainId ?? (await onlyDomain(backend))
+        return backend.getMptIssuanceId({
+          intentId,
+          domainId: domain,
+          timeoutMs: timeoutSeconds === undefined ? undefined : timeoutSeconds * 1000,
+        })
+      }),
+  })
+
 export const createListAccounts = (runtime: Runtime) =>
   createTool({
     id: 'listAccounts',
