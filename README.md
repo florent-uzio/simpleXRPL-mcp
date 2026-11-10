@@ -15,7 +15,7 @@ Requires Node.js 22.13 or later.
 2. Add the server to your MCP client, for example in Claude Code:
 
    ```bash
-   claude mcp add simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp
+   claude mcp add simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp@latest
    ```
 
    or in a JSON client config:
@@ -23,7 +23,7 @@ Requires Node.js 22.13 or later.
    ```json
    {
      "mcpServers": {
-       "simplexrpl": { "command": "npx", "args": ["-y", "@florent-uzio/simplexrpl-mcp"] }
+       "simplexrpl": { "command": "npx", "args": ["-y", "@florent-uzio/simplexrpl-mcp@latest"] }
      }
    }
    ```
