@@ -138,4 +138,6 @@ npm run mcp      # run the server over stdio
 npm run build    # bundle to dist/simplexrpl-mcp.js
 ```
 
+Registering the server while working in this repo? `npx @florent-uzio/simplexrpl-mcp` resolves to the local project (same package name) and fails with `command not found`, so the client reports `CONNECTION_CLOSED`. Register it with `@latest` instead (`claude mcp add simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp@latest`), or run the local build with `node dist/simplexrpl-mcp.js`.
+
 Versioning uses [Changesets](https://github.com/changesets/changesets): run `npx changeset` with each user-facing change. Merging to `main` opens a "Version Packages" PR; merging that publishes to npm through trusted publishing.
