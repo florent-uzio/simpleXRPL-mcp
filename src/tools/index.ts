@@ -7,6 +7,7 @@ import {
   createConfidentialMptConvertBack,
   createConfidentialMptMergeInbox,
 } from './confidential-mpt'
+import { createSponsorshipSetAsSponsee, createSponsorshipSetAsSponsor } from './sponsorship'
 import { getMcpVersion } from './server-info'
 import { createXrpTransfer } from './xrp-transfer'
 
@@ -24,4 +25,6 @@ export const createTools = (runtime: Runtime) => ({
   confidentialMptConvert: createConfidentialMptConvert(runtime),
   confidentialMptConvertBack: createConfidentialMptConvertBack(runtime),
   confidentialMptMergeInbox: createConfidentialMptMergeInbox(runtime),
+  sponsorshipSetAsSponsor: createSponsorshipSetAsSponsor(runtime),
+  sponsorshipSetAsSponsee: createSponsorshipSetAsSponsee(runtime),
 })

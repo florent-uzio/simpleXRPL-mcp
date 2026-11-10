@@ -47,6 +47,8 @@ Requires Node.js 22.13 or later.
 | `confidentialMptConvert`     | `propose`    | Converts public MPT into the confidential balance; a holder's first convert must be zero-amount. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`. |
 | `confidentialMptConvertBack` | `propose`    | Converts confidential MPT back into the public balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                          |
 | `confidentialMptMergeInbox`  | `propose`    | Merges the confidential inbox into the confidential balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                     |
+| `sponsorshipSetAsSponsor`    | `propose`    | Sets up or changes an XLS-68 Sponsorship from the sponsor's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                |
+| `sponsorshipSetAsSponsee`    | `propose`    | Sets the sponsor from the sponsee's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                        |
 
 Write tools must name their `environment`; they never use the default.
 

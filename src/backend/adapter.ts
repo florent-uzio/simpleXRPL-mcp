@@ -37,7 +37,7 @@ export type XrpTransfer = {
   from: string
 }
 
-/** A native MPT operation, sent from an XRPL address with optional memos. */
+/** A native non-Payment operation (MPT, sponsorship), sent from an XRPL address with optional memos. */
 export type MptOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos'> & {
   operation: Extract<
     CustodyTransactionOrder['operation'],
@@ -50,6 +50,8 @@ export type MptOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'm
         | 'ConfidentialMPTConvert'
         | 'ConfidentialMPTConvertBack'
         | 'ConfidentialMPTMergeInbox'
+        | 'SponsorshipSetAsSponsor'
+        | 'SponsorshipSetAsSponsee'
     }
   >
 }
