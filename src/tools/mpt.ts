@@ -20,9 +20,9 @@ const common = {
   dryRun: z.boolean().default(true).describe('Only run the Dry run (default); false also Proposes'),
 }
 
-const issuanceId = z.string().describe('MPT issuance id (192-bit hex)')
+export const issuanceId = z.string().describe('MPT issuance id (192-bit hex)')
 const holder = z.string().describe('Holder r-address')
-const tokenIdentifier = (id: string) => ({ type: 'MPTokenIssuanceId' as const, issuanceId: id })
+export const tokenIdentifier = (id: string) => ({ type: 'MPTokenIssuanceId' as const, issuanceId: id })
 const holderAddress = (address: string) => ({ type: 'Address' as const, address })
 
 type CommonInput = {
@@ -33,7 +33,7 @@ type CommonInput = {
   dryRun: boolean
 }
 
-const createMptTool = <Shape extends z.ZodRawShape>(
+export const createMptTool = <Shape extends z.ZodRawShape>(
   runtime: Runtime,
   options: {
     id: string
