@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import type { Runtime } from '../environments/runtime'
-import { createMptTool } from './mpt'
+import { createNativeOperationTool } from './native-write'
 
 const address = (what: string) => z.string().describe(`${what} r-address`)
 const drops = z.string().regex(/^-?\d+$/, 'an integer string in drops')
 
 export const createSponsorshipSetAsSponsor = (runtime: Runtime) =>
-  createMptTool(runtime, {
+  createNativeOperationTool(runtime, {
     id: 'sponsorshipSetAsSponsor',
     description:
       "Sets up or changes an XLS-68 Sponsorship from the sending account, the sponsor, for a sponsee (SponsorshipSet): the sponsor pays the sponsee's fee and/or owner reserve.",
@@ -44,7 +44,7 @@ export const createSponsorshipSetAsSponsor = (runtime: Runtime) =>
   })
 
 export const createSponsorshipSetAsSponsee = (runtime: Runtime) =>
-  createMptTool(runtime, {
+  createNativeOperationTool(runtime, {
     id: 'sponsorshipSetAsSponsee',
     description: 'Accepts or sets the sponsor of the sending account, the sponsee (SponsorshipSet).',
     shape: { sponsor: address('Sponsor') },

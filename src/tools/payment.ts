@@ -1,9 +1,9 @@
 import { createTool } from '@mastra/core/tools'
 import { xrpToDrops } from 'xrpl'
 import { z } from 'zod'
-import type { PaymentOrder } from '../backend/adapter'
-import { ToolFailure, type Runtime } from '../environments/runtime'
-import { issuanceId, memoSchema, toMemos } from './mpt'
+import type { Runtime } from '../environments/runtime'
+import { issuanceId } from './mpt'
+import { DRY_RUN_THEN_PROPOSE, dryRunThenPropose, memoSchema, toMemos } from './native-write'
 
 // Custody takes an IOU amount as an integer: the decimal value times 10^81, which it divides back before signing.
 const IOU_SCALE = 81
@@ -76,7 +76,8 @@ export const createPayment = (runtime: Runtime) =>
   createTool({
     id: 'payment',
     description:
-      'Proposes a Payment of XRP, an IOU, an MPT or a Custody ticker. The amount unit depends on `currency`: decimal XRP; a decimal IOU amount (scaled by 10^81 for Custody); an integer in the smallest unit for an MPT or a ticker. For an IOU the destination must hold a trust line to the issuer; for an MPT it must have run `mptAuthorize` (and be authorized by the issuer, when the issuance requires auth); the Dry run may not catch a missing one. The issuer paying out mints; a holder paying the issuer burns. Runs a Dry run first and, by default, stops there, returning the fee estimate. With `dryRun: false` it Proposes after a successful Dry run and returns the `intentId` at once; approvers act later. Needs the `propose` Access level and a named Environment.',
+      'Proposes a Payment of XRP, an IOU, an MPT or a Custody ticker. The amount unit depends on `currency`: decimal XRP; a decimal IOU amount (scaled by 10^81 for Custody); an integer in the smallest unit for an MPT or a ticker. For an IOU the destination must hold a trust line to the issuer; for an MPT it must have run `mptAuthorize` (and be authorized by the issuer, when the issuance requires auth); the Dry run may not catch a missing one. The issuer paying out mints; a holder paying the issuer burns. ' +
+      DRY_RUN_THEN_PROPOSE,
     inputSchema: z
       .object({
         environment: z.string().describe('Environment name; required, a write never uses the default'),
@@ -121,31 +122,19 @@ export const createPayment = (runtime: Runtime) =>
           context.addIssue({ code: 'custom', path: ['amount'], message: format.message })
       }),
     execute: input =>
-      runtime.run({ environment: input.environment, requires: 'propose' }, async backend => {
-        const order: PaymentOrder = {
-          account: input.account,
-          ledgerId: input.ledgerId,
-          memos: toMemos(input.memos),
-          sourceTag: input.sourceTag,
-          maximumFee: input.maximumFee,
-          feeStrategy: input.feeStrategy,
-          operation: {
-            type: 'Payment',
-            destination: toDestination(input.destination),
-            ...toAmountAndCurrency(input.amount, input.currency),
-            ...(input.destinationTag !== undefined && { destinationTag: input.destinationTag }),
-            ...(input.flags && { flags: input.flags }),
-          },
-        }
-        const check = await backend.dryRunPayment(order)
-        if (input.dryRun) return { dryRun: true as const, ...check }
-        if (!check.success) {
-          throw new ToolFailure(
-            'dry-run-failed',
-            `The Dry run failed, nothing was proposed: ${check.errors.join('; ')}`,
-          )
-        }
-        const { intentId } = await backend.proposePayment(order)
-        return { dryRun: false as const, intentId, estimatedFeeDrops: check.estimatedFeeDrops }
-      }),
+      dryRunThenPropose(runtime, input, () => ({
+        account: input.account,
+        ledgerId: input.ledgerId,
+        memos: toMemos(input.memos),
+        sourceTag: input.sourceTag,
+        maximumFee: input.maximumFee,
+        feeStrategy: input.feeStrategy,
+        operation: {
+          type: 'Payment',
+          destination: toDestination(input.destination),
+          ...toAmountAndCurrency(input.amount, input.currency),
+          ...(input.destinationTag !== undefined && { destinationTag: input.destinationTag }),
+          ...(input.flags && { flags: input.flags }),
+        },
+      })),
   })

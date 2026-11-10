@@ -38,19 +38,19 @@ describe.each([
     await setup()
     const result = await harness.call(tool, input)
     expect(result).toMatchObject({ dryRun: true, success: true })
-    expect(harness.adapter.mptDryRuns[0].operation).toEqual(operation)
-    expect(harness.adapter.mptProposals).toEqual([])
+    expect(harness.adapter.dryRuns[0].operation).toEqual(operation)
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('blocks the Propose when the Dry run fails, and Proposes when it succeeds', async () => {
     await setup()
     harness.adapter.state.dryRunResult = { success: false, errors: ['nope'] }
     expect(await harness.call(tool, { ...input, dryRun: false })).toMatchObject({ error: { code: 'dry-run-failed' } })
-    expect(harness.adapter.mptProposals).toEqual([])
+    expect(harness.adapter.proposals).toEqual([])
     harness.adapter.state.dryRunResult = { success: true, errors: [], estimatedFeeDrops: '12' }
     expect(await harness.call(tool, { ...input, dryRun: false })).toMatchObject({
       dryRun: false,
-      intentId: 'mpt-intent-1',
+      intentId: 'intent-1',
     })
   })
 })
@@ -66,6 +66,6 @@ describe('sponsorshipSetAsSponsor input', () => {
         maxFee: '-5',
       }),
     ).rejects.toThrow(/maxFee/)
-    expect(harness.adapter.mptDryRuns).toEqual([])
+    expect(harness.adapter.dryRuns).toEqual([])
   })
 })

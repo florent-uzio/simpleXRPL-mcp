@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { Runtime } from '../environments/runtime'
-import { createMptTool, issuanceId, tokenIdentifier } from './mpt'
+import { issuanceId, tokenIdentifier } from './mpt'
+import { createNativeOperationTool } from './native-write'
 
 const amount = z
   .string()
@@ -8,7 +9,7 @@ const amount = z
   .describe('Amount in the smallest unit of the MPT')
 
 export const createConfidentialMptConvert = (runtime: Runtime) =>
-  createMptTool(runtime, {
+  createNativeOperationTool(runtime, {
     id: 'confidentialMptConvert',
     description:
       "Converts public MPT into the sending account's confidential balance (ConfidentialMPTConvert). A holder's first convert must be a zero-amount one: it registers the holder's ElGamal key, and a non-zero first convert may fail on chain with `tecNO_PERMISSION` after costing a fee, which the Dry run does not catch. MPT transfers a holder received are quarantined and must be released before a convert can spend them.",
@@ -21,7 +22,7 @@ export const createConfidentialMptConvert = (runtime: Runtime) =>
   })
 
 export const createConfidentialMptConvertBack = (runtime: Runtime) =>
-  createMptTool(runtime, {
+  createNativeOperationTool(runtime, {
     id: 'confidentialMptConvertBack',
     description:
       "Converts confidential MPT back into the sending account's public balance (ConfidentialMPTConvertBack).",
@@ -34,7 +35,7 @@ export const createConfidentialMptConvertBack = (runtime: Runtime) =>
   })
 
 export const createConfidentialMptMergeInbox = (runtime: Runtime) =>
-  createMptTool(runtime, {
+  createNativeOperationTool(runtime, {
     id: 'confidentialMptMergeInbox',
     description:
       "Merges the sending account's confidential inbox into its confidential balance (ConfidentialMPTMergeInbox).",

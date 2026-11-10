@@ -59,7 +59,12 @@ describe('runSmoke', () => {
       '--propose',
     ])
     expect(passed).toBe(true)
-    expect(harness.adapter.proposals).toEqual([{ from: 'rSource', to: 'rDest', amount: '2' }])
+    expect(harness.adapter.proposals).toEqual([
+      {
+        account: 'rSource',
+        operation: { type: 'Payment', destination: { type: 'Address', address: 'rDest' }, amount: '2000000' },
+      },
+    ])
     expect(output).toMatch(/PASS.*propose/i)
     expect(output).toMatch(/intent-1/)
     expect(output).toMatch(/PASS.*waitForIntent/)

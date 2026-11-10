@@ -1,8 +1,10 @@
 import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
-import type { BatchOrder } from '../backend/adapter'
-import { ToolFailure, type Runtime } from '../environments/runtime'
-import { memoSchema, toMemos } from './mpt'
+import type { NativeOrder } from '../backend/adapter'
+import type { Runtime } from '../environments/runtime'
+import { dryRunThenPropose, memoSchema, toMemos } from './native-write'
+
+type BatchOrder = NativeOrder<'Batch'>
 
 const sequencing = z
   .discriminatedUnion('type', [
@@ -121,7 +123,7 @@ export const createDryRunBatch = (runtime: Runtime) =>
     inputSchema: z.object(batchShape),
     execute: raw =>
       runtime.run({ environment: raw.environment, requires: 'read' }, async backend => {
-        const check = await backend.dryRunBatch(toOrder(raw as BatchInput, []))
+        const check = await backend.dryRun(toOrder(raw as BatchInput, []))
         return { dryRun: true as const, ...check }
       }),
   })
@@ -146,24 +148,14 @@ export const createProposeBatch = (runtime: Runtime) =>
       dryRun: z.boolean().default(true).describe('Only run the Dry run (default); false also Proposes'),
     }),
     execute: raw =>
-      runtime.run({ environment: raw.environment, requires: 'propose' }, async backend => {
-        const order = toOrder(
+      dryRunThenPropose(runtime, raw, () =>
+        toOrder(
           raw as BatchInput,
           raw.batchSigners.map(({ participant, publicKey, signature }) => ({
             participant: { type: 'Address' as const, address: participant },
             publicKey,
             signature,
           })),
-        )
-        const check = await backend.dryRunBatch(order)
-        if (raw.dryRun) return { dryRun: true as const, ...check }
-        if (!check.success) {
-          throw new ToolFailure(
-            'dry-run-failed',
-            `The Dry run failed, nothing was proposed: ${check.errors.join('; ')}`,
-          )
-        }
-        const { intentId } = await backend.proposeBatch(order)
-        return { dryRun: false as const, intentId, estimatedFeeDrops: check.estimatedFeeDrops }
-      }),
+        ),
+      ),
   })
