@@ -45,11 +45,16 @@ const toDestination = (to: z.infer<typeof destination>) =>
 
 // Each currency has its own amount unit, so the amount is checked against the currency it pays.
 const amountFormats: Record<Currency['type'], { pattern: RegExp; message: string }> = {
-  XRP: { pattern: /^\d+(\.\d{1,6})?$/, message: 'a non-negative decimal XRP amount with at most 6 decimal places' },
-  IOU: { pattern: /^\d+(\.\d{1,81})?$/, message: 'a non-negative decimal amount with at most 81 decimal places' },
-  MPT: { pattern: /^\d+$/, message: "an unsigned integer in the token's smallest unit" },
-  Ticker: { pattern: /^\d+$/, message: "an unsigned integer in the ticker's smallest unit" },
+  XRP: { pattern: /^\d+(\.\d{1,6})?$/, message: 'a positive decimal XRP amount with at most 6 decimal places' },
+  IOU: {
+    pattern: new RegExp(`^\\d+(\\.\\d{1,${IOU_SCALE}})?$`),
+    message: `a positive decimal amount with at most ${IOU_SCALE} decimal places`,
+  },
+  MPT: { pattern: /^\d+$/, message: "a positive integer in the token's smallest unit" },
+  Ticker: { pattern: /^\d+$/, message: "a positive integer in the ticker's smallest unit" },
 }
+// Custody refuses a zero amount; catch it here rather than in the Dry run.
+const isPositive = (amount: string) => /[1-9]/.test(amount)
 
 const toAmountAndCurrency = (amount: string, paid: Currency) => {
   switch (paid.type) {
@@ -112,7 +117,7 @@ export const createPayment = (runtime: Runtime) =>
       })
       .superRefine(({ amount, currency: paid }, context) => {
         const format = amountFormats[paid.type]
-        if (!format.pattern.test(amount))
+        if (!format.pattern.test(amount) || !isPositive(amount))
           context.addIssue({ code: 'custom', path: ['amount'], message: format.message })
       }),
     execute: input =>

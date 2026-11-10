@@ -56,6 +56,8 @@ describe('payment', () => {
     ['an IOU with more than 81 decimals', '0.' + '1'.repeat(82), { type: 'IOU', code: 'USD', issuer: 'rIssuer' }],
     ['a fractional MPT amount', '1.5', { type: 'MPT', issuanceId: ISSUANCE }],
     ['a negative ticker amount', '-3', { type: 'Ticker', tickerId: 't-1' }],
+    ['a zero XRP amount', '0.000', undefined],
+    ['a zero MPT amount', '0', { type: 'MPT', issuanceId: ISSUANCE }],
   ])('rejects %s before touching the Backend', async (_case, amount, currency) => {
     await setup()
     await expect(harness.call('payment', { ...base, amount, ...(currency && { currency }) })).rejects.toThrow(/amount/)
