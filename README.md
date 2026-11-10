@@ -15,8 +15,10 @@ Requires Node.js 22.13 or later.
 2. Add the server to your MCP client, for example in Claude Code:
 
    ```bash
-   claude mcp add simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp@latest
+   claude mcp add --scope user simplexrpl -- npx -y @florent-uzio/simplexrpl-mcp@latest
    ```
+
+   `--scope user` makes the server available in all your projects. Without it, Claude Code registers it for the current project only (`local` scope).
 
    or in a JSON client config:
 
