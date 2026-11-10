@@ -6,11 +6,18 @@ import { encodeMptMetadata, mptMetadataSchema } from './mpt-metadata'
 
 const hex = (text: string) => Buffer.from(text, 'utf8').toString('hex').toUpperCase()
 
-const memoSchema = z.object({
+export const memoSchema = z.object({
   data: z.string().optional().describe('Memo text'),
   format: z.string().optional().describe('Memo format, e.g. text/plain'),
   type: z.string().optional().describe('Memo type, e.g. test'),
 })
+
+export const toMemos = (memos?: z.infer<typeof memoSchema>[]) =>
+  memos?.map(memo => ({
+    memoData: memo.data === undefined ? undefined : hex(memo.data),
+    memoFormat: memo.format === undefined ? undefined : hex(memo.format),
+    memoType: memo.type === undefined ? undefined : hex(memo.type),
+  }))
 
 const common = {
   environment: z.string().describe('Environment name; required, a write never uses the default'),
@@ -60,11 +67,7 @@ export const createMptTool = <Shape extends z.ZodRawShape>(
         const order: MptOrder = {
           account: input.account,
           ledgerId: input.ledgerId,
-          memos: input.memos?.map(memo => ({
-            memoData: memo.data === undefined ? undefined : hex(memo.data),
-            memoFormat: memo.format === undefined ? undefined : hex(memo.format),
-            memoType: memo.type === undefined ? undefined : hex(memo.type),
-          })),
+          memos: toMemos(input.memos),
           operation: options.operation(rest as unknown as z.infer<z.ZodObject<Shape>>),
         }
         const check = await backend.dryRunMpt(order)

@@ -8,6 +8,7 @@ import {
   createConfidentialMptMergeInbox,
 } from './confidential-mpt'
 import { createSponsorshipSetAsSponsee, createSponsorshipSetAsSponsor } from './sponsorship'
+import { createDryRunBatch, createProposeBatch } from './batch'
 import { getMcpVersion } from './server-info'
 import { createXrpTransfer } from './xrp-transfer'
 
@@ -27,4 +28,6 @@ export const createTools = (runtime: Runtime) => ({
   confidentialMptMergeInbox: createConfidentialMptMergeInbox(runtime),
   sponsorshipSetAsSponsor: createSponsorshipSetAsSponsor(runtime),
   sponsorshipSetAsSponsee: createSponsorshipSetAsSponsee(runtime),
+  dryRunBatch: createDryRunBatch(runtime),
+  proposeBatch: createProposeBatch(runtime),
 })

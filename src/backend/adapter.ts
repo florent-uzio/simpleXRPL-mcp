@@ -3,6 +3,7 @@ import {
   RippleCustody,
   generateCustodyKeypair,
   type CustodyKeyAlgorithm,
+  type CustodyTransactionDryRun,
   type CustodyTransactionOrder,
 } from 'simplexrpl'
 import { xrpToDrops } from 'xrpl'
@@ -56,6 +57,20 @@ export type MptOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'm
   >
 }
 
+type BatchOperation = Extract<CustodyTransactionOrder['operation'], { type: 'Batch' }>
+
+/** A native Batch, sent from the submitter's XRPL address. `batchSigners` is empty for a Dry run. */
+export type BatchOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos'> & { operation: BatchOperation }
+
+/** One account that must sign the Batch: sign `signingPayload`, return it as a `batchSigner` for `participant`. */
+export type BatchSigningRequirement = {
+  account: string
+  participant: BatchOperation['batchSigners'][number]['participant']
+  signingPayload: string
+}
+
+export type BatchDryRunResult = DryRunResult & { executionMode?: string; signers: BatchSigningRequirement[] }
+
 export type DryRunResult = { success: boolean; errors: string[]; estimatedFeeDrops?: string }
 
 export type AccountSummary = {
@@ -78,6 +93,9 @@ export interface CustodyBackend {
   dryRunMpt(order: MptOrder): Promise<DryRunResult>
   /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
   proposeMpt(order: MptOrder): Promise<{ intentId: string }>
+  dryRunBatch(order: BatchOrder): Promise<BatchDryRunResult>
+  /** Proposes the Batch and returns as soon as the Backend accepted it, without waiting for approvals. */
+  proposeBatch(order: BatchOrder): Promise<{ intentId: string }>
   listAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<AccountsPage>
 }
 
@@ -96,6 +114,38 @@ export const connectRippleCustody: Connect = async connection => {
     Account: from,
     Destination: to,
     Amount: xrpToDrops(amount),
+  })
+  // The library only dry-runs xrpl transactions, which cannot carry every native operation, so build the order here.
+  const dryRunNative = async (
+    order: Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos' | 'operation'>,
+  ): Promise<CustodyTransactionDryRun | undefined> => {
+    const reference = await custody.api.findByAddress(order.account, {
+      ledgerId: order.ledgerId,
+      domainId: connection.domainId,
+    })
+    if (!reference) return undefined
+    return (await custody.api.dryRun({
+      id: crypto.randomUUID(),
+      accountId: reference.accountId,
+      ledgerId: reference.ledgerId,
+      parameters: {
+        feeStrategy: { priority: 'Low', type: 'Priority' },
+        memos: [...(order.memos ?? [])],
+        operation: order.operation,
+        type: 'XRPL',
+      },
+      customProperties: {},
+      type: 'v0_CreateTransactionOrder',
+    })) as CustodyTransactionDryRun
+  }
+  const noAccount = (account: string): DryRunResult => ({
+    success: false,
+    errors: [`No account in the Domain holds ${account}`],
+  })
+  const summarize = (dryRun: CustodyTransactionDryRun): DryRunResult => ({
+    success: dryRun.success,
+    errors: dryRun.errors ?? [],
+    estimatedFeeDrops: dryRun.estimate.type === 'XRPL' ? dryRun.estimate.fee : undefined,
   })
   return {
     dryRunXrpTransfer: async transfer => {
@@ -119,33 +169,26 @@ export const connectRippleCustody: Connect = async connection => {
       return { intentId }
     },
     dryRunMpt: async order => {
-      // The library only dry-runs xrpl transactions, which cannot carry every native MPT flag, so build the order here.
-      const reference = await custody.api.findByAddress(order.account, {
-        ledgerId: order.ledgerId,
-        domainId: connection.domainId,
-      })
-      if (!reference) return { success: false, errors: [`No account in the Domain holds ${order.account}`] }
-      const dryRun = await custody.api.dryRun({
-        id: crypto.randomUUID(),
-        accountId: reference.accountId,
-        ledgerId: reference.ledgerId,
-        parameters: {
-          feeStrategy: { priority: 'Low', type: 'Priority' },
-          memos: [...(order.memos ?? [])],
-          operation: order.operation,
-          type: 'XRPL',
-        },
-        customProperties: {},
-        type: 'v0_CreateTransactionOrder',
-      })
+      const dryRun = await dryRunNative(order)
+      return dryRun ? summarize(dryRun) : noAccount(order.account)
+    },
+    dryRunBatch: async order => {
+      const dryRun = await dryRunNative(order)
+      if (!dryRun) return { ...noAccount(order.account), signers: [] }
+      const signing = dryRun.estimate.type === 'XRPL' ? dryRun.estimate.batchSigningData : undefined
       return {
-        success: dryRun.success,
-        errors: dryRun.errors ?? [],
-        estimatedFeeDrops:
-          dryRun.type === 'v0_CreateTransactionOrder' && dryRun.estimate.type === 'XRPL'
-            ? dryRun.estimate.fee
-            : undefined,
+        ...summarize(dryRun),
+        executionMode: signing?.executionMode,
+        signers: (signing?.signers ?? []).map(({ account, participant, signingPayload }) => ({
+          account,
+          participant,
+          signingPayload,
+        })),
       }
+    },
+    proposeBatch: async order => {
+      const { intentId } = await custody.api.proposeTransactionOrder(order)
+      return { intentId }
     },
     proposeMpt: async order => {
       const { intentId } = await custody.api.proposeTransactionOrder(order)
