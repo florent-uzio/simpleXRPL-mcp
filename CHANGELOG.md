@@ -1,5 +1,18 @@
 # @florent-uzio/simplexrpl-mcp
 
+## 0.3.0
+
+### Minor Changes
+
+- be69e40: Add the `dryRunBatch` and `proposeBatch` tools for XLS-56 Batches. `dryRunBatch` returns the fee estimate and the accounts that must sign. `proposeBatch` takes their `batchSigners`: this server cannot sign for them yet, since the pinned `simplexrpl` has no Batch signing. Inner transactions: `Payment` (XRP or MPT), `MPTokenAuthorize` and `TicketCreate`.
+- aa1b081: Add the `confidentialMptConvert`, `confidentialMptConvertBack` and `confidentialMptMergeInbox` write tools. Each runs a Dry run first and Proposes only with `dryRun: false`. `ConfidentialMPTSend` and `ConfidentialMPTClawback` are not included: they need cryptographic proofs the tools do not yet compute.
+- 6f05970: Add the `mptIssuanceCreate`, `mptAuthorize`, `mptIssuanceSet` and `mptIssuanceDestroy` write tools. Each runs a Dry run first and Proposes only with `dryRun: false`, accepts on-ledger memos, and `mptIssuanceCreate` takes XLS-89 token metadata and encodes it for you.
+- 4a90a2c: Add the `sponsorshipSetAsSponsor` and `sponsorshipSetAsSponsee` write tools (XLS-68 SponsorshipSet). Each runs a Dry run first and Proposes only with `dryRun: false`. A `sponsorship` option on other tools is not included: the pinned `simplexrpl` does not carry it on a transaction order.
+
+### Patch Changes
+
+- 4a90a2c: Fix the `mpt*` tools sending the sending `account`, `ledgerId` and `memos` inside the native operation as well as at the order level.
+
 ## 0.2.0
 
 ### Minor Changes
