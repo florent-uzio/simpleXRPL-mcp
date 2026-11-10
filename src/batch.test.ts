@@ -36,13 +36,13 @@ describe('dryRunBatch', () => {
       executionMode: 'AllOrNothing',
       signers: [{ account: 'rAlice', signingPayload: 'AA' }],
     })
-    expect(harness.adapter.batchProposals).toEqual([])
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('maps entries to native Batch entries, with no signers on a Dry run', async () => {
     await setup()
     await harness.call('dryRunBatch', batch)
-    expect(harness.adapter.batchDryRuns[0].operation).toMatchObject({
+    expect(harness.adapter.dryRuns[0].operation).toMatchObject({
       type: 'Batch',
       executionMode: 'AllOrNothing',
       sequencing: { type: 'PlatformManaged' },
@@ -70,7 +70,7 @@ describe('dryRunBatch', () => {
       entries: [batch.entries[0], { ...batch.entries[1], sequencing: { type: 'PlatformManaged' } }],
     }
     await expect(harness.call('dryRunBatch', bad)).rejects.toThrow(/PlatformManaged/)
-    expect(harness.adapter.batchDryRuns).toEqual([])
+    expect(harness.adapter.dryRuns).toEqual([])
   })
 
   it('rejects a Batch with fewer than 2 entries', async () => {
@@ -93,10 +93,10 @@ describe('proposeBatch', () => {
     await setup()
     const result = await harness.call('proposeBatch', signed)
     expect(result).toMatchObject({ dryRun: true, success: true })
-    expect(harness.adapter.batchDryRuns[0].operation.batchSigners).toEqual([
-      { participant: { type: 'Address', address: 'rAlice' }, publicKey: '02AB', signature: 'CD' },
-    ])
-    expect(harness.adapter.batchProposals).toEqual([])
+    expect(harness.adapter.dryRuns[0].operation).toMatchObject({
+      batchSigners: [{ participant: { type: 'Address', address: 'rAlice' }, publicKey: '02AB', signature: 'CD' }],
+    })
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('blocks the Propose when the Dry run fails', async () => {
@@ -104,13 +104,13 @@ describe('proposeBatch', () => {
     harness.adapter.state.dryRunResult = { success: false, errors: ['InvalidBatchSignature'] }
     const result = await harness.call('proposeBatch', { ...signed, dryRun: false })
     expect(result).toMatchObject({ error: { code: 'dry-run-failed' } })
-    expect(harness.adapter.batchProposals).toEqual([])
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('Proposes after a successful Dry run and returns the intentId at once', async () => {
     await setup()
     const result = await harness.call('proposeBatch', { ...signed, dryRun: false })
-    expect(result).toEqual({ environment: 'prod', dryRun: false, intentId: 'batch-intent-1', estimatedFeeDrops: '12' })
-    expect(harness.adapter.batchProposals[0].operation.batchSigners).toHaveLength(1)
+    expect(result).toEqual({ environment: 'prod', dryRun: false, intentId: 'intent-1', estimatedFeeDrops: '12' })
+    expect(harness.adapter.proposals[0].operation).toMatchObject({ batchSigners: [expect.anything()] })
   })
 })

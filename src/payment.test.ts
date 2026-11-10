@@ -17,10 +17,10 @@ describe('payment', () => {
     await setup()
     const result = await harness.call('payment', { ...base, amount: '10.5' })
     expect(result).toEqual({ environment: 'prod', dryRun: true, success: true, errors: [], estimatedFeeDrops: '12' })
-    expect(harness.adapter.paymentDryRuns).toEqual([
+    expect(harness.adapter.dryRuns).toEqual([
       { account: 'rSender', operation: { type: 'Payment', destination: toAddress, amount: '10500000' } },
     ])
-    expect(harness.adapter.paymentProposals).toEqual([])
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('pays an IOU: scales the decimal amount by 10^81, the integer unit Custody takes for IOUs', async () => {
@@ -30,7 +30,7 @@ describe('payment', () => {
       amount: '10.5',
       currency: { type: 'IOU', code: 'USD', issuer: 'rIssuer' },
     })
-    expect(harness.adapter.paymentDryRuns[0].operation).toEqual({
+    expect(harness.adapter.dryRuns[0].operation).toEqual({
       type: 'Payment',
       destination: toAddress,
       amount: '105' + '0'.repeat(80),
@@ -41,7 +41,7 @@ describe('payment', () => {
   it('pays an MPT: passes the amount in the smallest unit unchanged', async () => {
     await setup()
     await harness.call('payment', { ...base, amount: '1250', currency: { type: 'MPT', issuanceId: ISSUANCE } })
-    expect(harness.adapter.paymentDryRuns[0].operation).toEqual({
+    expect(harness.adapter.dryRuns[0].operation).toEqual({
       type: 'Payment',
       destination: toAddress,
       amount: '1250',
@@ -61,7 +61,7 @@ describe('payment', () => {
   ])('rejects %s before touching the Backend', async (_case, amount, currency) => {
     await setup()
     await expect(harness.call('payment', { ...base, amount, ...(currency && { currency }) })).rejects.toThrow(/amount/)
-    expect(harness.adapter.paymentDryRuns).toEqual([])
+    expect(harness.adapter.dryRuns).toEqual([])
   })
 
   it.each([
@@ -70,7 +70,7 @@ describe('payment', () => {
   ])('pays %s by its id', async (_case, destination, expected) => {
     await setup()
     await harness.call('payment', { ...base, amount: '1', destination })
-    expect(harness.adapter.paymentDryRuns[0].operation.destination).toEqual(expected)
+    expect(harness.adapter.dryRuns[0].operation).toMatchObject({ destination: expected })
   })
 
   it('carries the optional Payment and order fields, with memos hex-encoded', async () => {
@@ -86,7 +86,7 @@ describe('payment', () => {
       maximumFee: '5000',
       feeStrategy: { type: 'SpecifiedAdditionalFee', drops: '10' },
     })
-    expect(harness.adapter.paymentDryRuns).toEqual([
+    expect(harness.adapter.dryRuns).toEqual([
       {
         account: 'rSender',
         ledgerId: 'xrpl-1',
@@ -108,7 +108,7 @@ describe('payment', () => {
   it('accepts a fee priority as the fee strategy', async () => {
     await setup()
     await harness.call('payment', { ...base, amount: '1', feeStrategy: { type: 'Priority', priority: 'High' } })
-    expect(harness.adapter.paymentDryRuns[0].feeStrategy).toEqual({ type: 'Priority', priority: 'High' })
+    expect(harness.adapter.dryRuns[0].feeStrategy).toEqual({ type: 'Priority', priority: 'High' })
   })
 
   it('refuses a write on a read Environment before touching the Backend', async () => {
@@ -131,7 +131,7 @@ describe('payment', () => {
     const result = await harness.call('payment', { ...base, amount: '1', dryRun: false })
     expect(result).toMatchObject({ environment: 'prod', error: { code: 'dry-run-failed' } })
     expect(JSON.stringify(result)).toMatch(/No funds/)
-    expect(harness.adapter.paymentProposals).toEqual([])
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('Proposes the Dry-run order after a successful Dry run and returns the intentId at once', async () => {
@@ -145,16 +145,16 @@ describe('payment', () => {
     expect(result).toEqual({
       environment: 'prod',
       dryRun: false,
-      intentId: 'payment-intent-1',
+      intentId: 'intent-1',
       estimatedFeeDrops: '12',
     })
-    expect(harness.adapter.paymentProposals).toEqual(harness.adapter.paymentDryRuns)
+    expect(harness.adapter.proposals).toEqual(harness.adapter.dryRuns)
   })
 
   it('pays a Custody ticker by its id, with the amount in its smallest unit', async () => {
     await setup()
     await harness.call('payment', { ...base, amount: '700', currency: { type: 'Ticker', tickerId: 't-1' } })
-    expect(harness.adapter.paymentDryRuns[0].operation).toMatchObject({
+    expect(harness.adapter.dryRuns[0].operation).toMatchObject({
       amount: '700',
       currency: { type: 'TickerId', tickerId: 't-1' },
     })

@@ -33,8 +33,8 @@ describe.each([
     await setup()
     const result = await harness.call(tool, input)
     expect(result).toMatchObject({ dryRun: true, success: true })
-    expect(harness.adapter.mptDryRuns[0].operation).toEqual(operation)
-    expect(harness.adapter.mptProposals).toEqual([])
+    expect(harness.adapter.dryRuns[0].operation).toEqual(operation)
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('blocks the Propose when the Dry run fails', async () => {
@@ -42,13 +42,13 @@ describe.each([
     harness.adapter.state.dryRunResult = { success: false, errors: ['nope'] }
     const result = await harness.call(tool, { ...input, dryRun: false })
     expect(result).toMatchObject({ error: { code: 'dry-run-failed' } })
-    expect(harness.adapter.mptProposals).toEqual([])
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('Proposes after a successful Dry run', async () => {
     await setup()
     const result = await harness.call(tool, { ...input, dryRun: false })
-    expect(result).toMatchObject({ dryRun: false, intentId: 'mpt-intent-1' })
+    expect(result).toMatchObject({ dryRun: false, intentId: 'intent-1' })
   })
 })
 
@@ -57,6 +57,6 @@ describe('amount', () => {
     await setup()
     await expect(harness.call('confidentialMptConvert', { ...base, amount: '-1' })).rejects.toThrow(/amount/)
     await expect(harness.call('confidentialMptConvertBack', { ...base, amount: '1.5' })).rejects.toThrow(/amount/)
-    expect(harness.adapter.mptDryRuns).toEqual([])
+    expect(harness.adapter.dryRuns).toEqual([])
   })
 })

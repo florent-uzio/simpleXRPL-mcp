@@ -9,6 +9,11 @@ const setup = async (access: string = 'propose') => {
 afterEach(() => harness?.cleanup())
 
 const transfer = { environment: 'prod', to: 'rDestination', amount: '10.5', from: 'rSource' }
+// The Native operation order the transfer becomes: the amount in drops, sent from `from`.
+const order = {
+  account: 'rSource',
+  operation: { type: 'Payment', destination: { type: 'Address', address: 'rDestination' }, amount: '10500000' },
+}
 
 describe('xrpTransfer', () => {
   it('refuses a write on a read Environment before touching the Backend', async () => {
@@ -44,7 +49,7 @@ describe('xrpTransfer', () => {
     await setup()
     const result = await harness.call('xrpTransfer', transfer)
     expect(result).toEqual({ environment: 'prod', dryRun: true, success: true, errors: [], estimatedFeeDrops: '12' })
-    expect(harness.adapter.dryRuns).toEqual([{ to: 'rDestination', amount: '10.5', from: 'rSource' }])
+    expect(harness.adapter.dryRuns).toEqual([order])
     expect(harness.adapter.proposals).toEqual([])
   })
 
@@ -68,6 +73,8 @@ describe('xrpTransfer', () => {
     await setup()
     const result = await harness.call('xrpTransfer', { ...transfer, dryRun: false })
     expect(result).toEqual({ environment: 'prod', dryRun: false, intentId: 'intent-1', estimatedFeeDrops: '12' })
-    expect(harness.adapter.proposals).toEqual([{ to: 'rDestination', amount: '10.5', from: 'rSource' }])
+    // The Propose sends the very order the Dry run checked.
+    expect(harness.adapter.proposals).toEqual([order])
+    expect(harness.adapter.proposals).toEqual(harness.adapter.dryRuns)
   })
 })

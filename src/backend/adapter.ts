@@ -6,7 +6,6 @@ import {
   type CustodyTransactionDryRun,
   type CustodyTransactionOrder,
 } from 'simplexrpl'
-import { xrpToDrops } from 'xrpl'
 import { pollUntil, type Attempt } from './poll'
 
 export type CustodyConnection = {
@@ -31,43 +30,27 @@ export type IntentOutcome = {
   reason: string | undefined
 }
 
-export type XrpTransfer = {
-  to: string
-  /** Decimal XRP, e.g. '10' or '0.25'. */
-  amount: string
-  /** Source r-address. */
-  from: string
-}
+/** The operations sent as Native operations; each tool builds one of them. */
+type NativeOperationType =
+  | 'Payment'
+  | 'MPTokenIssuanceCreate'
+  | 'MPTokenAuthorize'
+  | 'MPTokenIssuanceSet'
+  | 'MPTokenIssuanceDestroy'
+  | 'ConfidentialMPTConvert'
+  | 'ConfidentialMPTConvertBack'
+  | 'ConfidentialMPTMergeInbox'
+  | 'SponsorshipSetAsSponsor'
+  | 'SponsorshipSetAsSponsee'
+  | 'Batch'
 
-/** A native non-Payment operation (MPT, sponsorship), sent from an XRPL address with optional memos. */
-export type MptOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos'> & {
-  operation: Extract<
-    CustodyTransactionOrder['operation'],
-    {
-      type:
-        | 'MPTokenIssuanceCreate'
-        | 'MPTokenAuthorize'
-        | 'MPTokenIssuanceSet'
-        | 'MPTokenIssuanceDestroy'
-        | 'ConfidentialMPTConvert'
-        | 'ConfidentialMPTConvertBack'
-        | 'ConfidentialMPTMergeInbox'
-        | 'SponsorshipSetAsSponsor'
-        | 'SponsorshipSetAsSponsee'
-    }
-  >
-}
-
-/** A native Payment of XRP, an IOU, an MPT or a Custody ticker, with the order fields simplexrpl passes on. */
-export type PaymentOrder = Pick<
+/** A Native operation sent from an XRPL address, with the order fields simplexrpl passes on. */
+export type NativeOrder<Type extends NativeOperationType = NativeOperationType> = Pick<
   CustodyTransactionOrder,
   'account' | 'ledgerId' | 'memos' | 'sourceTag' | 'maximumFee' | 'feeStrategy'
-> & { operation: Extract<CustodyTransactionOrder['operation'], { type: 'Payment' }> }
+> & { operation: Extract<CustodyTransactionOrder['operation'], { type: Type }> }
 
-type BatchOperation = Extract<CustodyTransactionOrder['operation'], { type: 'Batch' }>
-
-/** A native Batch, sent from the submitter's XRPL address. `batchSigners` is empty for a Dry run. */
-export type BatchOrder = Pick<CustodyTransactionOrder, 'account' | 'ledgerId' | 'memos'> & { operation: BatchOperation }
+type BatchOperation = NativeOrder<'Batch'>['operation']
 
 /** One account that must sign the Batch: sign `signingPayload`, return it as a `batchSigner` for `participant`. */
 export type BatchSigningRequirement = {
@@ -76,7 +59,8 @@ export type BatchSigningRequirement = {
   signingPayload: string
 }
 
-export type BatchDryRunResult = DryRunResult & { executionMode?: string; signers: BatchSigningRequirement[] }
+/** A Batch's Dry run also lists the accounts that must sign it. */
+export type NativeDryRunResult = DryRunResult & { executionMode?: string; signers?: BatchSigningRequirement[] }
 
 export type DryRunResult = { success: boolean; errors: string[]; estimatedFeeDrops?: string }
 
@@ -124,18 +108,10 @@ export interface CustodyBackend {
   getMe(): Promise<Me>
   /** Follows an Intent until it ends or `timeoutMs` runs out; an Intent still awaiting approval is an outcome, not an error. */
   waitForIntent(intentId: string, options?: { timeoutMs?: number }): Promise<IntentOutcome>
-  dryRunXrpTransfer(transfer: XrpTransfer): Promise<DryRunResult>
+  /** Dry-runs the order with the defaults `propose` applies. A Batch's result also lists its `signers`. */
+  dryRun(order: NativeOrder): Promise<NativeDryRunResult>
   /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
-  proposeXrpTransfer(transfer: XrpTransfer): Promise<{ intentId: string }>
-  dryRunMpt(order: MptOrder): Promise<DryRunResult>
-  /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
-  proposeMpt(order: MptOrder): Promise<{ intentId: string }>
-  dryRunPayment(order: PaymentOrder): Promise<DryRunResult>
-  /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
-  proposePayment(order: PaymentOrder): Promise<{ intentId: string }>
-  dryRunBatch(order: BatchOrder): Promise<BatchDryRunResult>
-  /** Proposes the Batch and returns as soon as the Backend accepted it, without waiting for approvals. */
-  proposeBatch(order: BatchOrder): Promise<{ intentId: string }>
+  propose(order: NativeOrder): Promise<{ intentId: string }>
   listAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<AccountsPage>
   /**
    * Waits up to `timeoutMs` (default 30 s; 0 looks once) for the MPT issuance ID an MPTokenIssuanceCreate Intent
@@ -154,19 +130,8 @@ export const connectRippleCustody: Connect = async connection => {
     primary: connection.primary,
     allowRawSigning: connection.allowRawSigning,
   })
-  const paymentFor = ({ to, amount, from }: XrpTransfer) => ({
-    TransactionType: 'Payment' as const,
-    Account: from,
-    Destination: to,
-    Amount: xrpToDrops(amount),
-  })
   // The library only dry-runs xrpl transactions, which cannot carry every native operation, so build the order here.
-  const dryRunNative = async (
-    order: Pick<
-      CustodyTransactionOrder,
-      'account' | 'ledgerId' | 'memos' | 'operation' | 'sourceTag' | 'maximumFee' | 'feeStrategy'
-    >,
-  ): Promise<CustodyTransactionDryRun | undefined> => {
+  const dryRunNative = async (order: NativeOrder): Promise<CustodyTransactionDryRun | undefined> => {
     const reference = await custody.api.findByAddress(order.account, {
       ledgerId: order.ledgerId,
       domainId: connection.domainId,
@@ -199,41 +164,11 @@ export const connectRippleCustody: Connect = async connection => {
     estimatedFeeDrops: dryRun.estimate.type === 'XRPL' ? dryRun.estimate.fee : undefined,
   })
   return {
-    dryRunXrpTransfer: async transfer => {
-      const dryRun = await custody.api.dryRunTransaction(paymentFor(transfer))
-      return {
-        success: dryRun.success,
-        errors: dryRun.errors ?? [],
-        estimatedFeeDrops: dryRun.estimate.type === 'XRPL' ? dryRun.estimate.fee : undefined,
-      }
-    },
-    proposeXrpTransfer: async transfer => {
-      const payment = paymentFor(transfer)
-      const { intentId } = await custody.api.proposeTransactionOrder({
-        account: payment.Account,
-        operation: {
-          type: 'Payment',
-          destination: { type: 'Address', address: payment.Destination },
-          amount: payment.Amount,
-        },
-      })
-      return { intentId }
-    },
-    dryRunMpt: async order => {
+    dryRun: async order => {
+      const isBatch = order.operation.type === 'Batch'
       const dryRun = await dryRunNative(order)
-      return dryRun ? summarize(dryRun) : noAccount(order.account)
-    },
-    dryRunPayment: async order => {
-      const dryRun = await dryRunNative(order)
-      return dryRun ? summarize(dryRun) : noAccount(order.account)
-    },
-    proposePayment: async order => {
-      const { intentId } = await custody.api.proposeTransactionOrder(order)
-      return { intentId }
-    },
-    dryRunBatch: async order => {
-      const dryRun = await dryRunNative(order)
-      if (!dryRun) return { ...noAccount(order.account), signers: [] }
+      if (!dryRun) return isBatch ? { ...noAccount(order.account), signers: [] } : noAccount(order.account)
+      if (!isBatch) return summarize(dryRun)
       const signing = dryRun.estimate.type === 'XRPL' ? dryRun.estimate.batchSigningData : undefined
       return {
         ...summarize(dryRun),
@@ -245,11 +180,7 @@ export const connectRippleCustody: Connect = async connection => {
         })),
       }
     },
-    proposeBatch: async order => {
-      const { intentId } = await custody.api.proposeTransactionOrder(order)
-      return { intentId }
-    },
-    proposeMpt: async order => {
+    propose: async order => {
       const { intentId } = await custody.api.proposeTransactionOrder(order)
       return { intentId }
     },

@@ -37,15 +37,15 @@ describe.each([
   it('treats an omitted Environment as an input error', async () => {
     await setup()
     await expect(harness.call(tool, { account: 'rIssuer', ...extra })).rejects.toThrow(/environment/)
-    expect(harness.adapter.mptDryRuns).toEqual([])
+    expect(harness.adapter.dryRuns).toEqual([])
   })
 
   it('defaults to a Dry run and proposes nothing', async () => {
     await setup()
     const result = await harness.call(tool, input)
     expect(result).toEqual({ environment: 'prod', dryRun: true, success: true, errors: [], estimatedFeeDrops: '12' })
-    expect(harness.adapter.mptDryRuns).toHaveLength(1)
-    expect(harness.adapter.mptProposals).toEqual([])
+    expect(harness.adapter.dryRuns).toHaveLength(1)
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('blocks the Propose when the Dry run fails', async () => {
@@ -53,20 +53,20 @@ describe.each([
     harness.adapter.state.dryRunResult = { success: false, errors: ['tecNO_PERMISSION'] }
     const result = await harness.call(tool, { ...input, dryRun: false })
     expect(result).toMatchObject({ environment: 'prod', error: { code: 'dry-run-failed' } })
-    expect(harness.adapter.mptProposals).toEqual([])
+    expect(harness.adapter.proposals).toEqual([])
   })
 
   it('Proposes after a successful Dry run and returns the intentId at once', async () => {
     await setup()
     const result = await harness.call(tool, { ...input, dryRun: false })
-    expect(result).toEqual({ environment: 'prod', dryRun: false, intentId: 'mpt-intent-1', estimatedFeeDrops: '12' })
-    expect(harness.adapter.mptProposals).toHaveLength(1)
+    expect(result).toEqual({ environment: 'prod', dryRun: false, intentId: 'intent-1', estimatedFeeDrops: '12' })
+    expect(harness.adapter.proposals).toHaveLength(1)
   })
 
   it('hex-encodes memos', async () => {
     await setup()
     await harness.call(tool, { ...input, memos: [{ data: 'simplexrpl test', type: 'test', format: 'text/plain' }] })
-    expect(harness.adapter.mptDryRuns[0].memos).toEqual([
+    expect(harness.adapter.dryRuns[0].memos).toEqual([
       {
         memoData: Buffer.from('simplexrpl test').toString('hex').toUpperCase(),
         memoFormat: '746578742F706C61696E',
@@ -85,7 +85,7 @@ describe('mptIssuanceCreate operation', () => {
       flags: ['tfMPTCanTransfer', 'tfMPTCanClawback', 'tfMPTCanConfidentialAmount'],
       metadata,
     })
-    const { operation } = harness.adapter.mptDryRuns[0]
+    const { operation } = harness.adapter.dryRuns[0]
     expect(Object.keys(operation).sort()).toEqual(['assetScale', 'flags', 'metadata', 'type'])
     expect(operation).toMatchObject({
       type: 'MPTokenIssuanceCreate',
@@ -105,7 +105,7 @@ describe('mptIssuanceCreate operation', () => {
     await expect(
       harness.call('mptIssuanceCreate', { ...base, metadata: { ...metadata, asset_class: 'rwa' } }),
     ).rejects.toThrow(/asset_subclass/)
-    expect(harness.adapter.mptDryRuns).toEqual([])
+    expect(harness.adapter.dryRuns).toEqual([])
   })
 })
 
@@ -113,7 +113,7 @@ describe('other operations', () => {
   it('maps mptAuthorize with a holder', async () => {
     await setup()
     await harness.call('mptAuthorize', { ...base, issuanceId: 'ABC', holder: 'rHolder' })
-    expect(harness.adapter.mptDryRuns[0].operation).toEqual({
+    expect(harness.adapter.dryRuns[0].operation).toEqual({
       type: 'MPTokenAuthorize',
       tokenIdentifier: { type: 'MPTokenIssuanceId', issuanceId: 'ABC' },
       flags: [],
@@ -124,7 +124,7 @@ describe('other operations', () => {
   it('maps mptIssuanceSet with a lock flag', async () => {
     await setup()
     await harness.call('mptIssuanceSet', { ...base, issuanceId: 'ABC', flags: ['tfMPTLock'], memos: [{ data: 'x' }] })
-    expect(harness.adapter.mptDryRuns[0].operation).toEqual({
+    expect(harness.adapter.dryRuns[0].operation).toEqual({
       type: 'MPTokenIssuanceSet',
       tokenIdentifier: { type: 'MPTokenIssuanceId', issuanceId: 'ABC' },
       flags: ['tfMPTLock'],
@@ -135,7 +135,7 @@ describe('other operations', () => {
   it('maps mptIssuanceDestroy', async () => {
     await setup()
     await harness.call('mptIssuanceDestroy', { ...base, issuanceId: 'ABC' })
-    expect(harness.adapter.mptDryRuns[0].operation).toEqual({
+    expect(harness.adapter.dryRuns[0].operation).toEqual({
       type: 'MPTokenIssuanceDestroy',
       tokenIdentifier: { type: 'MPTokenIssuanceId', issuanceId: 'ABC' },
     })

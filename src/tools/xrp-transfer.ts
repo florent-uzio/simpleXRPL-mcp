@@ -1,12 +1,13 @@
 import { createTool } from '@mastra/core/tools'
+import { xrpToDrops } from 'xrpl'
 import { z } from 'zod'
-import { ToolFailure, type Runtime } from '../environments/runtime'
+import type { Runtime } from '../environments/runtime'
+import { DRY_RUN_THEN_PROPOSE, dryRunThenPropose } from './native-write'
 
 export const createXrpTransfer = (runtime: Runtime) =>
   createTool({
     id: 'xrpTransfer',
-    description:
-      'Proposes an XRP transfer. Runs a Dry run first and, by default, stops there, returning the fee estimate. With `dryRun: false` it Proposes after a successful Dry run and returns the `intentId` at once; approvers act later. Needs the `propose` Access level and a named Environment.',
+    description: `Proposes an XRP transfer. ${DRY_RUN_THEN_PROPOSE}`,
     inputSchema: z.object({
       environment: z.string().describe('Environment name; required, a write never uses the default'),
       to: z.string().describe('Destination r-address'),
@@ -17,18 +18,13 @@ export const createXrpTransfer = (runtime: Runtime) =>
       from: z.string().describe('Source r-address, an account held in the Environment'),
       dryRun: z.boolean().default(true).describe('Only run the Dry run (default); false also Proposes'),
     }),
-    execute: ({ environment, to, amount, from, dryRun }) =>
-      runtime.run({ environment, requires: 'propose' }, async backend => {
-        const transfer = { to, amount, from }
-        const check = await backend.dryRunXrpTransfer(transfer)
-        if (dryRun) return { dryRun: true as const, ...check }
-        if (!check.success) {
-          throw new ToolFailure(
-            'dry-run-failed',
-            `The Dry run failed, nothing was proposed: ${check.errors.join('; ')}`,
-          )
-        }
-        const { intentId } = await backend.proposeXrpTransfer(transfer)
-        return { dryRun: false as const, intentId, estimatedFeeDrops: check.estimatedFeeDrops }
-      }),
+    execute: input =>
+      dryRunThenPropose(runtime, input, () => ({
+        account: input.from,
+        operation: {
+          type: 'Payment',
+          destination: { type: 'Address', address: input.to },
+          amount: xrpToDrops(input.amount),
+        },
+      })),
   })
