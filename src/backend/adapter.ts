@@ -81,6 +81,28 @@ export type AccountSummary = {
 
 export type AccountsPage = { accounts: AccountSummary[]; nextCursor?: string }
 
+/** The part of a Custody transaction (per-transaction detail, not the list projection) that holds an MPT issuance. */
+export type CustodyTransaction = {
+  ledgerTransactionData?: { ledgerData?: { type: string; tokenData?: { issuanceId: string } } | null } | null
+}
+
+/** The MPT issuance ID created by an Intent, from the detailed transactions its order produced. */
+export const mptIssuanceIdOf = (intentId: string, transactions: CustodyTransaction[]): string => {
+  const ids = new Set(
+    transactions.flatMap(({ ledgerTransactionData }) => {
+      const ledgerData = ledgerTransactionData?.ledgerData
+      return ledgerData?.type === 'Xrpl' && ledgerData.tokenData ? [ledgerData.tokenData.issuanceId] : []
+    }),
+  )
+  if (ids.size === 1) return [...ids][0]
+  if (ids.size > 1) throw new Error(`Intent ${intentId} produced several MPT issuances: ${[...ids].join(', ')}.`)
+  if (transactions.length === 0)
+    throw new Error(`No transaction is registered yet for Intent ${intentId}. Check it executed, then retry shortly.`)
+  throw new Error(
+    `Intent ${intentId} carries no MPT issuance ID yet. Custody fills it in shortly after the Intent executes: retry shortly. If it persists, check the Intent was an MPTokenIssuanceCreate.`,
+  )
+}
+
 export interface CustodyBackend {
   /** The Environment's configured default domain, if any. */
   readonly domainId?: string
@@ -97,6 +119,8 @@ export interface CustodyBackend {
   /** Proposes the Batch and returns as soon as the Backend accepted it, without waiting for approvals. */
   proposeBatch(order: BatchOrder): Promise<{ intentId: string }>
   listAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<AccountsPage>
+  /** The MPT issuance ID an executed MPTokenIssuanceCreate Intent created; throws when it is not readable (yet). */
+  getMptIssuanceId(options: { intentId: string; domainId: string }): Promise<string>
 }
 
 export type Connect = (connection: CustodyConnection) => Promise<CustodyBackend>
@@ -220,6 +244,17 @@ export const connectRippleCustody: Connect = async connection => {
         accounts.push({ id: item.data.id, alias: item.data.alias, addresses })
       }
       return page.nextStartingAfter ? { accounts, nextCursor: page.nextStartingAfter } : { accounts }
+    },
+    getMptIssuanceId: async ({ intentId, domainId }) => {
+      // The order id is the intentId. The list projection omits ledger data, so read each transaction in full.
+      const { items } = await custody.api.call('getTransactions', {
+        path: { domainId },
+        query: { 'orderReference.Id': intentId },
+      })
+      const transactions = await Promise.all(
+        items.map(item => custody.api.call('getTransaction', { path: { domainId, transactionId: item.id } })),
+      )
+      return mptIssuanceIdOf(intentId, transactions)
     },
     getMe: async () => {
       const me = await custody.api.call('getMe')

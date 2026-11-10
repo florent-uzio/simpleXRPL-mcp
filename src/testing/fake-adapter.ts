@@ -32,8 +32,10 @@ export const createFakeAdapter = () => {
   const mptProposals: MptOrder[] = []
   const batchDryRuns: BatchOrder[] = []
   const batchProposals: BatchOrder[] = []
+  const issuanceLookups: { intentId: string; domainId: string }[] = []
   const state = {
     batchSigners: [] as BatchSigningRequirement[],
+    issuanceId: 'ISSUANCE-1' as string | Error,
     dryRunResult: { success: true, errors: [], estimatedFeeDrops: '12' } as DryRunResult,
     outcome: { intentId: '', status: 'Executed', isTerminal: true, isSuccess: true, reason: undefined } as
       IntentOutcome | Error,
@@ -77,6 +79,11 @@ export const createFakeAdapter = () => {
         batchProposals.push(order)
         return { intentId: `batch-intent-${batchProposals.length}` }
       },
+      getMptIssuanceId: async lookup => {
+        issuanceLookups.push(lookup)
+        if (state.issuanceId instanceof Error) throw state.issuanceId
+        return state.issuanceId
+      },
       waitForIntent: async (intentId, options) => {
         waits.push({ intentId, timeoutMs: options?.timeoutMs })
         if (state.outcome instanceof Error) throw state.outcome
@@ -99,6 +106,7 @@ export const createFakeAdapter = () => {
     batchDryRuns,
     batchProposals,
     waits,
+    issuanceLookups,
     state,
   }
 }

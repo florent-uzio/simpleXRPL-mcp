@@ -1,5 +1,5 @@
 import type { Runtime } from '../environments/runtime'
-import { createGetMe, createListAccounts, createWaitForIntent } from './custody'
+import { createGetMe, createGetMptIssuanceId, createListAccounts, createWaitForIntent } from './custody'
 import { createListEnvironments } from './environments'
 import { createMptAuthorize, createMptIssuanceCreate, createMptIssuanceDestroy, createMptIssuanceSet } from './mpt'
 import {
@@ -17,6 +17,7 @@ export const createTools = (runtime: Runtime) => ({
   listEnvironments: createListEnvironments(runtime),
   getMe: createGetMe(runtime),
   waitForIntent: createWaitForIntent(runtime),
+  getMptIssuanceId: createGetMptIssuanceId(runtime),
   xrpTransfer: createXrpTransfer(runtime),
   listAccounts: createListAccounts(runtime),
   mptIssuanceCreate: createMptIssuanceCreate(runtime),
