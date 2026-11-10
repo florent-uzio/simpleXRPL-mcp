@@ -1,5 +1,12 @@
 # @florent-uzio/simplexrpl-mcp
 
+## 0.4.0
+
+### Minor Changes
+
+- c92fde9: Add the `getMptIssuanceId` tool: it returns the MPT issuance ID an executed `mptIssuanceCreate` Intent created, so the new token can be used with `mptAuthorize`, `mptIssuanceSet`, `mptIssuanceDestroy` and the confidential MPT tools. It waits up to `timeoutSeconds` (default 30, `0` looks once) for Custody to record the ID, and reports a wait that runs out as an answer with a `reason`, not an error.
+- aebee16: Add a `payment` tool that sends XRP, an IOU, an MPT or a Custody ticker, to an r-address or a Custody account or endpoint, with an optional destination tag, source tag, fee strategy, maximum fee, `tfSponsorCreatedAccount` flag and memos. It runs a Dry run first and Proposes only with `dryRun: false`. An IOU amount is a decimal, scaled by 10^81 for Custody. `xrpTransfer` is unchanged.
+
 ## 0.3.0
 
 ### Minor Changes
