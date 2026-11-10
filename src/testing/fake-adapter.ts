@@ -8,6 +8,7 @@ import type {
   IntentOutcome,
   Me,
   MptOrder,
+  PaymentOrder,
   XrpTransfer,
 } from '../backend/adapter'
 
@@ -30,6 +31,8 @@ export const createFakeAdapter = () => {
   const proposals: XrpTransfer[] = []
   const mptDryRuns: MptOrder[] = []
   const mptProposals: MptOrder[] = []
+  const paymentDryRuns: PaymentOrder[] = []
+  const paymentProposals: PaymentOrder[] = []
   const batchDryRuns: BatchOrder[] = []
   const batchProposals: BatchOrder[] = []
   const state = {
@@ -69,6 +72,14 @@ export const createFakeAdapter = () => {
         mptProposals.push(order)
         return { intentId: `mpt-intent-${mptProposals.length}` }
       },
+      dryRunPayment: async order => {
+        paymentDryRuns.push(order)
+        return state.dryRunResult
+      },
+      proposePayment: async order => {
+        paymentProposals.push(order)
+        return { intentId: `payment-intent-${paymentProposals.length}` }
+      },
       dryRunBatch: async order => {
         batchDryRuns.push(order)
         return { ...state.dryRunResult, executionMode: order.operation.executionMode, signers: state.batchSigners }
@@ -96,6 +107,8 @@ export const createFakeAdapter = () => {
     proposals,
     mptDryRuns,
     mptProposals,
+    paymentDryRuns,
+    paymentProposals,
     batchDryRuns,
     batchProposals,
     waits,

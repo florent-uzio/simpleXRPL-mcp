@@ -9,6 +9,7 @@ import {
 } from './confidential-mpt'
 import { createSponsorshipSetAsSponsee, createSponsorshipSetAsSponsor } from './sponsorship'
 import { createDryRunBatch, createProposeBatch } from './batch'
+import { createPayment } from './payment'
 import { getMcpVersion } from './server-info'
 import { createXrpTransfer } from './xrp-transfer'
 
@@ -18,6 +19,7 @@ export const createTools = (runtime: Runtime) => ({
   getMe: createGetMe(runtime),
   waitForIntent: createWaitForIntent(runtime),
   xrpTransfer: createXrpTransfer(runtime),
+  payment: createPayment(runtime),
   listAccounts: createListAccounts(runtime),
   mptIssuanceCreate: createMptIssuanceCreate(runtime),
   mptAuthorize: createMptAuthorize(runtime),
