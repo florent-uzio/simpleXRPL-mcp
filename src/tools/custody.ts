@@ -36,6 +36,7 @@ export const createWaitForIntent = (runtime: Runtime) =>
         }),
       ),
   })
+
 export const createGetMptIssuanceId = (runtime: Runtime) =>
   createTool({
     id: 'getMptIssuanceId',

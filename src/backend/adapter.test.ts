@@ -40,10 +40,23 @@ describe('mptIssuanceIdOf', () => {
     expect(() => mptIssuanceIdOf('i-1', [payment])).toThrow('check the Intent was an MPTokenIssuanceCreate')
   })
 
+  it('ignores the issuance of an MPT transaction that did not create it', () => {
+    const authorize = {
+      ledgerTransactionData: {
+        ledgerData: { ...executedIssuanceCreate.ledgerTransactionData.ledgerData, transactionType: 'MPTokenAuthorize' },
+      },
+    }
+    expect(() => mptIssuanceIdOf('i-1', [authorize])).toThrow('check the Intent was an MPTokenIssuanceCreate')
+  })
+
   it('refuses to pick between several issuances', () => {
     const other = {
       ledgerTransactionData: {
-        ledgerData: { type: 'Xrpl', tokenData: { issuanceId: '0000000127A7571C7691CE271B3C5B3ADA0BDFA09EF1C5F3' } },
+        ledgerData: {
+          type: 'Xrpl',
+          transactionType: 'MPTokenIssuanceCreate',
+          tokenData: { issuanceId: '0000000127A7571C7691CE271B3C5B3ADA0BDFA09EF1C5F3' },
+        },
       },
     }
     expect(() => mptIssuanceIdOf('i-1', [executedIssuanceCreate, other])).toThrow('several MPT issuances')

@@ -83,7 +83,9 @@ export type AccountsPage = { accounts: AccountSummary[]; nextCursor?: string }
 
 /** The part of a Custody transaction (per-transaction detail, not the list projection) that holds an MPT issuance. */
 export type CustodyTransaction = {
-  ledgerTransactionData?: { ledgerData?: { type: string; tokenData?: { issuanceId: string } } | null } | null
+  ledgerTransactionData?: {
+    ledgerData?: { type: string; transactionType?: string; tokenData?: { issuanceId: string } } | null
+  } | null
 }
 
 /** The MPT issuance ID created by an Intent, from the detailed transactions its order produced. */
@@ -91,7 +93,12 @@ export const mptIssuanceIdOf = (intentId: string, transactions: CustodyTransacti
   const ids = new Set(
     transactions.flatMap(({ ledgerTransactionData }) => {
       const ledgerData = ledgerTransactionData?.ledgerData
-      return ledgerData?.type === 'Xrpl' && ledgerData.tokenData ? [ledgerData.tokenData.issuanceId] : []
+      // Other MPT transactions carry the issuance they act on: only a create's is the one this Intent made.
+      return ledgerData?.type === 'Xrpl' &&
+        ledgerData.transactionType === 'MPTokenIssuanceCreate' &&
+        ledgerData.tokenData
+        ? [ledgerData.tokenData.issuanceId]
+        : []
     }),
   )
   if (ids.size === 1) return [...ids][0]
