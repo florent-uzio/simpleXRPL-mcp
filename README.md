@@ -32,27 +32,29 @@ Requires Node.js 22.13 or later.
 
 ## Tools
 
-| Tool                         | Access level | What it does                                                                                                                                                               |
-| ---------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getMcpVersion`              | none         | Reports the server version.                                                                                                                                                |
-| `listEnvironments`           | none         | Lists the Environments with their Access level and Raw signing setting.                                                                                                    |
-| `getMe`                      | `read`       | Returns the Environment's own Custody user.                                                                                                                                |
-| `listAccounts`               | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                                                                                    |
-| `waitForIntent`              | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error.                                                                  |
-| `getMptIssuanceId`           | `read`       | Returns the MPT issuance ID an executed `mptIssuanceCreate` Intent created, waiting up to `timeoutSeconds` (default 30) for Custody to record it.                          |
-| `payment`                    | `propose`    | Sends XRP, an IOU, an MPT or a Custody ticker, to an r-address or a Custody account or endpoint. Same Dry run / `dryRun: false` flow, with optional tags, fee and `memos`. |
-| `xrpTransfer`                | `propose`    | Dry run (default, returns the fee estimate); with `dryRun: false` it then Proposes and returns the `intentId` at once.                                                     |
-| `mptIssuanceCreate`          | `propose`    | Creates an MPT issuance, with XLS-89 `metadata` encoded for you. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                     |
-| `mptAuthorize`               | `propose`    | Authorizes (or, with `tfMPTUnauthorize`, deauthorizes) a holder for an MPT. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                          |
-| `mptIssuanceSet`             | `propose`    | Locks or unlocks an MPT, or enables confidential balances. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                           |
-| `mptIssuanceDestroy`         | `propose`    | Destroys an MPT issuance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                                            |
-| `confidentialMptConvert`     | `propose`    | Converts public MPT into the confidential balance; a holder's first convert must be zero-amount. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.     |
-| `confidentialMptConvertBack` | `propose`    | Converts confidential MPT back into the public balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                              |
-| `confidentialMptMergeInbox`  | `propose`    | Merges the confidential inbox into the confidential balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                         |
-| `sponsorshipSetAsSponsor`    | `propose`    | Sets up or changes an XLS-68 Sponsorship from the sponsor's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                    |
-| `sponsorshipSetAsSponsee`    | `propose`    | Sets the sponsor from the sponsee's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                            |
-| `dryRunBatch`                | `read`       | Dry run of a Batch (XLS-56): the fee estimate and `signers`, one per account that must sign. Does not propose. Entries take their tools' input.                            |
-| `proposeBatch`               | `propose`    | Proposes a Batch with the `batchSigners` you supply. Same Dry run / `dryRun: false` flow. This server does not sign for the signers yet.                                   |
+| Tool                          | Access level | What it does                                                                                                                                                               |
+| ----------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getMcpVersion`               | none         | Reports the server version.                                                                                                                                                |
+| `listEnvironments`            | none         | Lists the Environments with their Access level and Raw signing setting.                                                                                                    |
+| `getMe`                       | `read`       | Returns the Environment's own Custody user.                                                                                                                                |
+| `listAccounts`                | `read`       | Browses a Domain's accounts and their XRPL addresses, one page at a time with a cursor.                                                                                    |
+| `listQuarantinedTransfers`    | `read`       | Lists the transfers an account received that Custody still holds in quarantine.                                                                                            |
+| `releaseQuarantinedTransfers` | `propose`    | Releases named quarantined transfers (`v0_ReleaseQuarantinedTransfers`) after a Dry run; skips a compliance check.                                                         |
+| `waitForIntent`               | `read`       | Follows an Intent until it is executed, rejected, expired or failed. "Awaiting approval" is not an error.                                                                  |
+| `getMptIssuanceId`            | `read`       | Returns the MPT issuance ID an executed `mptIssuanceCreate` Intent created, waiting up to `timeoutSeconds` (default 30) for Custody to record it.                          |
+| `payment`                     | `propose`    | Sends XRP, an IOU, an MPT or a Custody ticker, to an r-address or a Custody account or endpoint. Same Dry run / `dryRun: false` flow, with optional tags, fee and `memos`. |
+| `xrpTransfer`                 | `propose`    | Dry run (default, returns the fee estimate); with `dryRun: false` it then Proposes and returns the `intentId` at once.                                                     |
+| `mptIssuanceCreate`           | `propose`    | Creates an MPT issuance, with XLS-89 `metadata` encoded for you. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                     |
+| `mptAuthorize`                | `propose`    | Authorizes (or, with `tfMPTUnauthorize`, deauthorizes) a holder for an MPT. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                          |
+| `mptIssuanceSet`              | `propose`    | Locks or unlocks an MPT, or enables confidential balances. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                           |
+| `mptIssuanceDestroy`          | `propose`    | Destroys an MPT issuance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                                            |
+| `confidentialMptConvert`      | `propose`    | Converts public MPT into the confidential balance; a holder's first convert must be zero-amount. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.     |
+| `confidentialMptConvertBack`  | `propose`    | Converts confidential MPT back into the public balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                              |
+| `confidentialMptMergeInbox`   | `propose`    | Merges the confidential inbox into the confidential balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                         |
+| `sponsorshipSetAsSponsor`     | `propose`    | Sets up or changes an XLS-68 Sponsorship from the sponsor's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                    |
+| `sponsorshipSetAsSponsee`     | `propose`    | Sets the sponsor from the sponsee's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                            |
+| `dryRunBatch`                 | `read`       | Dry run of a Batch (XLS-56): the fee estimate and `signers`, one per account that must sign. Does not propose. Entries take their tools' input.                            |
+| `proposeBatch`                | `propose`    | Proposes a Batch with the `batchSigners` you supply. Same Dry run / `dryRun: false` flow. This server does not sign for the signers yet.                                   |
 
 Write tools must name their `environment`; they never use the default.
 

@@ -243,3 +243,30 @@ describe('simpleXRPL client verbs', () => {
     await expect(write(() => Promise.reject(new Error('socket closed')))).rejects.toThrow('socket closed')
   })
 })
+
+describe('quarantined transfers', () => {
+  it('dry-runs and proposes a release of the named transfers for the account holding the address', async () => {
+    const { api, backend } = setup()
+    const request = { account: 'rSender', transferIds: ['t-1'] }
+    expect(await backend.dryRunRelease(request)).toEqual({ success: true, errors: [] })
+    expect(await backend.proposeRelease(request)).toEqual({ intentId: 'release-2' })
+    const payload = { type: 'v0_ReleaseQuarantinedTransfers', accountId: 'a-1', transferIds: ['t-1'] }
+    expect(api.releases.map(release => release.payload)).toEqual([payload, payload])
+  })
+
+  it('fails the release Dry run of an address no account holds, without asking Custody', async () => {
+    const { api, backend } = setup()
+    expect(await backend.dryRunRelease({ account: 'rStranger', transferIds: ['t-1'] })).toEqual({
+      success: false,
+      errors: ['No account in the Domain holds rStranger'],
+    })
+    expect(api.releases).toEqual([])
+  })
+
+  it("lists the account's quarantined transfers", async () => {
+    const { api, backend } = setup()
+    const transfer = { id: 't-1', tickerId: 'tk', value: '5', registeredAt: '2026-11-11T00:00:00Z' }
+    api.state.quarantined.set('a-1', [transfer])
+    expect(await backend.listQuarantinedTransfers({ account: 'rSender', domainId: 'd-1' })).toEqual([transfer])
+  })
+})

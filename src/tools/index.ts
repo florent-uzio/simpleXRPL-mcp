@@ -12,6 +12,7 @@ import { createSponsorshipSetAsSponsee, createSponsorshipSetAsSponsor } from './
 import { createDryRunBatch, createProposeBatch } from './batch'
 import { createPayment } from './payment'
 import { getMcpVersion } from './server-info'
+import { createListQuarantinedTransfers, createReleaseQuarantinedTransfers } from './quarantine'
 import { createXrpTransfer } from './xrp-transfer'
 
 export const createTools = (runtime: Runtime) => ({
@@ -23,6 +24,8 @@ export const createTools = (runtime: Runtime) => ({
   xrpTransfer: createXrpTransfer(runtime),
   payment: createPayment(runtime),
   listAccounts: createListAccounts(runtime),
+  listQuarantinedTransfers: createListQuarantinedTransfers(runtime),
+  releaseQuarantinedTransfers: createReleaseQuarantinedTransfers(runtime),
   mptIssuanceCreate: createMptIssuanceCreate(runtime),
   mptAuthorize: createMptAuthorize(runtime),
   mptIssuanceSet: createMptIssuanceSet(runtime),

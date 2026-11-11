@@ -1,4 +1,12 @@
-import type { CustodyApi, CustodyTransaction, IntentOutcome, Me, TransactionOrderPayload } from '../backend/adapter'
+import type {
+  CustodyApi,
+  CustodyTransaction,
+  IntentOutcome,
+  Me,
+  QuarantinedTransfer,
+  ReleasePayload,
+  TransactionOrderPayload,
+} from '../backend/adapter'
 import { fakeMe } from './fake-adapter'
 
 type DryRun = Awaited<ReturnType<CustodyApi['dryRun']>>
@@ -7,11 +15,15 @@ type DryRun = Awaited<ReturnType<CustodyApi['dryRun']>>
 export const createInMemoryCustodyApi = () => {
   const dryRuns: TransactionOrderPayload[] = []
   const proposals: TransactionOrderPayload[] = []
+  const releases: { step: 'dryRun' | 'propose'; payload: ReleasePayload }[] = []
   /** XRPL address → the account holding it in the session's Domain. */
   const accounts = new Map<string, { accountId: string; ledgerId: string }>()
   const state = {
     me: fakeMe as Me,
     dryRun: { success: true, errors: [], estimate: { type: 'XRPL', fee: '12' } } as unknown as DryRun,
+    releaseDryRun: { success: true, errors: [] as string[] },
+    /** Account id → its quarantined transfers. */
+    quarantined: new Map<string, QuarantinedTransfer[]>(),
     accountPages: [] as Awaited<ReturnType<CustodyApi['getAccounts']>>[],
     ledgers: [] as { id: string; type: string }[],
     /** Account id → its addresses. */
@@ -33,6 +45,15 @@ export const createInMemoryCustodyApi = () => {
       proposals.push(payload)
       return { intentId: payload.id }
     },
+    dryRunRelease: async payload => {
+      releases.push({ step: 'dryRun', payload })
+      return state.releaseDryRun
+    },
+    proposeRelease: async payload => {
+      releases.push({ step: 'propose', payload })
+      return { intentId: `release-${releases.length}` }
+    },
+    listQuarantinedTransfers: async ({ accountId }) => state.quarantined.get(accountId) ?? [],
     getMe: async () => state.me,
     // The cursor is the index of the page.
     getAccounts: async ({ cursor }) => state.accountPages[Number(cursor ?? 0)] ?? { accounts: [] },
@@ -49,5 +70,5 @@ export const createInMemoryCustodyApi = () => {
     },
     waitForIntent: async intentId => ({ ...state.outcome, intentId }),
   }
-  return { ...api, accounts, dryRuns, proposals, state }
+  return { ...api, accounts, dryRuns, proposals, releases, state }
 }
