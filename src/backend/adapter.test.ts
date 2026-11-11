@@ -7,6 +7,12 @@ const payment: NativeOrder = {
   operation: { type: 'Payment', destination: { type: 'Address', address: 'rReceiver' }, amount: '1000000' },
 }
 
+const batchOrder = (account: string) =>
+  ({
+    account,
+    operation: { type: 'Batch', executionMode: 'AllOrNothing', operations: [], batchSigners: [] },
+  }) as unknown as NativeOrder
+
 const setup = () => {
   const api = createInMemoryCustodyApi()
   api.accounts.set('rSender', { accountId: 'a-1', ledgerId: 'xrpl-1' })
@@ -59,10 +65,7 @@ describe('Ripple Custody adapter', () => {
         },
       },
     } as unknown as typeof api.state.dryRun
-    const batch = {
-      account: 'rSender',
-      operation: { type: 'Batch', executionMode: 'AllOrNothing', operations: [], batchSigners: [] },
-    } as unknown as NativeOrder
+    const batch = batchOrder('rSender')
     expect(await backend.dryRun(batch)).toEqual({
       success: true,
       errors: [],
@@ -74,10 +77,7 @@ describe('Ripple Custody adapter', () => {
 
   it('lists no signers for a Batch from an address no account holds', async () => {
     const { backend } = setup()
-    const batch = {
-      account: 'rStranger',
-      operation: { type: 'Batch', executionMode: 'AllOrNothing', operations: [], batchSigners: [] },
-    } as unknown as NativeOrder
+    const batch = batchOrder('rStranger')
     expect(await backend.dryRun(batch)).toMatchObject({ success: false, signers: [] })
   })
 
