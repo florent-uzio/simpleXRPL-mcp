@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { Runtime } from '../environments/runtime'
-import { issuanceId, tokenIdentifier } from './mpt'
+import { issuanceId, tokenIdentifier } from './operations/mpt'
 import { createNativeOperationTool } from './native-write'
 
 const amount = z

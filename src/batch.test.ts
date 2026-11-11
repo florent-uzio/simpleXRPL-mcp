@@ -13,10 +13,13 @@ const batch = {
   account: 'rSubmitter',
   executionMode: 'AllOrNothing',
   entries: [
-    { operation: { type: 'Payment', destination: 'rBob', amount: '1000' }, sequencing: { type: 'PlatformManaged' } },
+    {
+      operation: { type: 'Payment', destination: 'rBob', amount: '0.001', currency: { type: 'XRP' } },
+      sequencing: { type: 'PlatformManaged' },
+    },
     {
       participant: 'rAlice',
-      operation: { type: 'Payment', destination: 'rBob', amount: '5', issuanceId: 'ABC' },
+      operation: { type: 'Payment', destination: 'rBob', amount: '5', currency: { type: 'MPT', issuanceId: 'ABC' } },
       sequencing: { type: 'Ticket', value: 7 },
     },
   ],
@@ -59,6 +62,87 @@ describe('dryRunBatch', () => {
           operation: { currency: { type: 'MultiPurposeToken', issuanceId: 'ABC' } },
           sequencing: { type: 'Ticket', value: 7 },
         },
+      ],
+    })
+  })
+
+  it('takes a Payment entry in the same units as the payment tool: decimal XRP, and a decimal IOU', async () => {
+    await setup()
+    const iou = {
+      operation: {
+        type: 'Payment',
+        destination: { accountId: 'acc-1' },
+        amount: '10.5',
+        currency: { type: 'IOU', code: 'USD', issuer: 'rIssuer' },
+      },
+      sequencing: { type: 'PlatformManaged' },
+    }
+    await harness.call('dryRunBatch', { ...batch, entries: [batch.entries[0], iou] })
+    expect(harness.adapter.dryRuns[0].operation).toMatchObject({
+      entries: [
+        { operation: { amount: '1000' } },
+        {
+          operation: {
+            type: 'Payment',
+            destination: { type: 'Account', accountId: 'acc-1' },
+            amount: '105' + '0'.repeat(80),
+            currency: { type: 'Currency', code: 'USD', issuer: 'rIssuer' },
+          },
+        },
+      ],
+    })
+  })
+
+  it.each([
+    ['an entry in the old drops format, with no currency', { destination: 'rBob', amount: '1000' }],
+    ['an old MPT entry, with issuanceId and no currency', { destination: 'rBob', amount: '5', issuanceId: 'ABC' }],
+    [
+      'an XRP amount with more than 6 decimals',
+      { destination: 'rBob', amount: '1.1234567', currency: { type: 'XRP' } },
+    ],
+  ])('rejects a Payment entry with %s before touching the Backend', async (_case, fields) => {
+    await setup()
+    const bad = { operation: { type: 'Payment', ...fields }, sequencing: { type: 'PlatformManaged' } }
+    await expect(harness.call('dryRunBatch', { ...batch, entries: [batch.entries[0], bad] })).rejects.toThrow(
+      /currency|amount/,
+    )
+    expect(harness.adapter.dryRuns).toEqual([])
+  })
+
+  it('maps MPT entries the way their standalone tools do', async () => {
+    await setup()
+    const entries = [
+      { type: 'MPTokenAuthorize', issuanceId: 'ABC', holder: 'rHolder' },
+      {
+        type: 'MPTokenIssuanceCreate',
+        assetScale: 2,
+        metadata: { ticker: 'SX', name: 'T', icon: 'i', asset_class: 'other', issuer_name: 'I' },
+      },
+      { type: 'MPTokenIssuanceSet', issuanceId: 'ABC', flags: ['tfMPTLock'] },
+      { type: 'MPTokenIssuanceDestroy', issuanceId: 'ABC' },
+    ].map(operation => ({ operation, sequencing: { type: 'PlatformManaged' } }))
+    await harness.call('dryRunBatch', { ...batch, entries })
+    const tokenIdentifier = { type: 'MPTokenIssuanceId', issuanceId: 'ABC' }
+    expect(harness.adapter.dryRuns[0].operation).toMatchObject({
+      entries: [
+        {
+          operation: {
+            type: 'MPTokenAuthorize',
+            tokenIdentifier,
+            flags: [],
+            holder: { type: 'Address', address: 'rHolder' },
+          },
+        },
+        {
+          operation: {
+            type: 'MPTokenIssuanceCreate',
+            assetScale: 2,
+            flags: [],
+            metadata: { type: 'HexEncodedMetadata', value: expect.any(String) },
+          },
+        },
+        { operation: { type: 'MPTokenIssuanceSet', tokenIdentifier, flags: ['tfMPTLock'], mutableFlags: [] } },
+        { operation: { type: 'MPTokenIssuanceDestroy', tokenIdentifier } },
       ],
     })
   })
