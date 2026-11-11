@@ -3,6 +3,8 @@ import { z } from 'zod'
 import type { NativeOrder } from '../backend/adapter'
 import type { Runtime } from '../environments/runtime'
 import { dryRunThenPropose, memoSchema, toMemos } from './native-write'
+import { mptAuthorize, mptIssuanceCreate, mptIssuanceDestroy, mptIssuanceSet } from './operations/mpt'
+import { checkPaymentAmount, paymentCurrency, payment } from './operations/payment'
 
 type BatchOrder = NativeOrder<'Batch'>
 
@@ -14,20 +16,20 @@ const sequencing = z
   ])
   .describe('How the transaction is sequenced; `PlatformManaged` lets Custody pick the Account Sequence')
 
+// Each entry operation takes the same input, in the same units, as its standalone tool.
 const innerOperation = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('Payment'),
-    destination: z.string().describe('Destination r-address'),
-    amount: z.string().describe('Drops for XRP, else the MPT amount in its smallest unit'),
-    issuanceId: z.string().optional().describe('MPT issuance id; omit to pay XRP'),
-    destinationTag: z.number().int().min(0).optional(),
-  }),
-  z.object({
-    type: z.literal('MPTokenAuthorize'),
-    issuanceId: z.string(),
-    holder: z.string().optional().describe('Holder r-address, when the entry sender is the issuer'),
-    flags: z.array(z.literal('tfMPTUnauthorize')).default([]),
-  }),
+  z
+    .object({
+      type: z.literal('Payment'),
+      ...payment.shape,
+      // Required here: an old entry gave the amount in drops with no `currency`, and must not pass as decimal XRP.
+      currency: paymentCurrency.describe('What is paid'),
+    })
+    .superRefine(checkPaymentAmount),
+  z.object({ type: z.literal('MPTokenAuthorize'), ...mptAuthorize.shape }),
+  z.object({ type: z.literal('MPTokenIssuanceCreate'), ...mptIssuanceCreate.shape }),
+  z.object({ type: z.literal('MPTokenIssuanceSet'), ...mptIssuanceSet.shape }),
+  z.object({ type: z.literal('MPTokenIssuanceDestroy'), ...mptIssuanceDestroy.shape }),
   z.object({ type: z.literal('TicketCreate'), ticketCount: z.number().int().min(1).max(250) }),
 ])
 
@@ -67,25 +69,19 @@ type BatchInput = {
   entries: Entry[]
 }
 
+// Each builder reads only its own fields, so the entry operation is passed whole.
 const toOperation = (operation: Entry['operation']) => {
   switch (operation.type) {
     case 'Payment':
-      return {
-        type: 'Payment' as const,
-        destination: { type: 'Address' as const, address: operation.destination },
-        amount: operation.amount,
-        ...(operation.issuanceId && {
-          currency: { type: 'MultiPurposeToken' as const, issuanceId: operation.issuanceId },
-        }),
-        ...(operation.destinationTag !== undefined && { destinationTag: operation.destinationTag }),
-      }
+      return payment.operation(operation)
     case 'MPTokenAuthorize':
-      return {
-        type: 'MPTokenAuthorize' as const,
-        tokenIdentifier: { type: 'MPTokenIssuanceId' as const, issuanceId: operation.issuanceId },
-        flags: operation.flags,
-        ...(operation.holder && { holder: { type: 'Address' as const, address: operation.holder } }),
-      }
+      return mptAuthorize.operation(operation)
+    case 'MPTokenIssuanceCreate':
+      return mptIssuanceCreate.operation(operation)
+    case 'MPTokenIssuanceSet':
+      return mptIssuanceSet.operation(operation)
+    case 'MPTokenIssuanceDestroy':
+      return mptIssuanceDestroy.operation(operation)
     case 'TicketCreate':
       return operation
   }
@@ -119,7 +115,7 @@ export const createDryRunBatch = (runtime: Runtime) =>
   createTool({
     id: 'dryRunBatch',
     description:
-      'Runs a Dry run of a Batch (XLS-56) without proposing it. Returns the fee estimate and `signers`: one entry per account that must sign, each with the `signingPayload` to sign. Signing is not done by this server yet: sign each payload elsewhere and pass the result to `proposeBatch` as `batchSigners`.',
+      'Runs a Dry run of a Batch (XLS-56) without proposing it. Each entry operation takes the same input, in the same units, as its standalone tool (`payment`, `mptAuthorize`, `mptIssuanceCreate`, `mptIssuanceSet`, `mptIssuanceDestroy`), except that a Payment entry must name its `currency`. Returns the fee estimate and `signers`: one entry per account that must sign, each with the `signingPayload` to sign. Signing is not done by this server yet: sign each payload elsewhere and pass the result to `proposeBatch` as `batchSigners`.',
     inputSchema: z.object(batchShape),
     execute: raw =>
       runtime.run({ environment: raw.environment, requires: 'read' }, async backend => {

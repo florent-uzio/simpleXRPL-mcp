@@ -51,7 +51,7 @@ Requires Node.js 22.13 or later.
 | `confidentialMptMergeInbox`  | `propose`    | Merges the confidential inbox into the confidential balance. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                         |
 | `sponsorshipSetAsSponsor`    | `propose`    | Sets up or changes an XLS-68 Sponsorship from the sponsor's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                    |
 | `sponsorshipSetAsSponsee`    | `propose`    | Sets the sponsor from the sponsee's side. Same Dry run / `dryRun: false` flow, with optional on-ledger `memos`.                                                            |
-| `dryRunBatch`                | `read`       | Dry run of a Batch (XLS-56): the fee estimate and `signers`, one per account that must sign. Does not propose.                                                             |
+| `dryRunBatch`                | `read`       | Dry run of a Batch (XLS-56): the fee estimate and `signers`, one per account that must sign. Does not propose. Entries take their tools' input.                            |
 | `proposeBatch`               | `propose`    | Proposes a Batch with the `batchSigners` you supply. Same Dry run / `dryRun: false` flow. This server does not sign for the signers yet.                                   |
 
 Write tools must name their `environment`; they never use the default.
