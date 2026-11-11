@@ -83,7 +83,7 @@ export const createListAccounts = (runtime: Runtime) =>
       }),
   })
 
-const onlyDomain = async (backend: CustodyBackend) => {
+export const onlyDomain = async (backend: CustodyBackend) => {
   const { domains } = await backend.getMe()
   if (domains.length === 1) return domains[0].id
   throw new ToolFailure(

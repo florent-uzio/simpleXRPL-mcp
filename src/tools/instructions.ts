@@ -7,13 +7,14 @@ export const INSTRUCTIONS = `
     - Say which Environment you used in every response: never mix data from two Environments without saying so.
 
     ## Writing
-    - Write tools (payment, xrpTransfer, mptIssuanceCreate, mptAuthorize, mptIssuanceSet, mptIssuanceDestroy, confidentialMptConvert, confidentialMptConvertBack, confidentialMptMergeInbox, sponsorshipSetAsSponsor, sponsorshipSetAsSponsee, proposeBatch) need an Environment with the \`propose\` Access level, and must name their \`environment\`: they never use the default.
+    - Write tools (payment, xrpTransfer, mptIssuanceCreate, mptAuthorize, mptIssuanceSet, mptIssuanceDestroy, confidentialMptConvert, confidentialMptConvertBack, confidentialMptMergeInbox, sponsorshipSetAsSponsor, sponsorshipSetAsSponsee, proposeBatch, releaseQuarantinedTransfers) need an Environment with the \`propose\` Access level, and must name their \`environment\`: they never use the default.
     - They run a Dry run first. By default they stop there and return the fee estimate; pass \`dryRun: false\` to Propose, which happens only if the Dry run succeeded.
     - \`payment\` sends XRP, an IOU, an MPT or a Custody ticker. The destination must already hold a trust line for an IOU, or have run \`mptAuthorize\` for an MPT (or the issuer authorized it, when the issuance requires auth); the issuer itself needs neither.
     - A Propose returns the \`intentId\` at once: approvers act later, so a pending Intent is not an error.
     - Once an mptIssuanceCreate Intent is executed, get the new token's \`issuanceId\` with getMptIssuanceId. It waits for Custody to record it; if the answer has only a \`reason\`, call it again.
     - A Batch entry takes the same input, in the same units, as the standalone tool for its operation; a Payment entry must name its \`currency\`.
     - A Batch needs a signature from each of its signers: \`dryRunBatch\` lists them, but this server cannot sign for them yet, so \`proposeBatch\` takes their \`batchSigners\` from you.
+    - Incoming transfers can be quarantined: until released they count as unavailable, so a spend fails its Dry run with \`CurrentlyNotEnoughFunds\`. List them with listQuarantinedTransfers, then release only the ones the user named with releaseQuarantinedTransfers; releasing skips a compliance check, so never release on your own initiative.
     - Never Propose the same Intent again because a result looks incomplete.
 
     ## Client verbs

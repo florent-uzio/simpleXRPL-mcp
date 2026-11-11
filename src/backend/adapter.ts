@@ -74,6 +74,12 @@ export type NativeDryRunResult = DryRunResult & { executionMode?: string; signer
 
 export type DryRunResult = { success: boolean; errors: string[]; estimatedFeeDrops?: string }
 
+/** A transfer Custody holds in quarantine: until released, the holder cannot spend it. */
+export type QuarantinedTransfer = { id: string; tickerId: string; value: string; registeredAt: string }
+
+/** The transfers of one account that a release names. */
+export type ReleaseRequest = { account: string; ledgerId?: string; transferIds: string[] }
+
 export type AccountSummary = {
   id: string
   alias: string
@@ -103,6 +109,16 @@ export interface CustodyBackend {
   /** Proposes the Intent and returns as soon as the Backend accepted it, without waiting for approvals. */
   propose(order: NativeOrder): Promise<{ intentId: string }>
   listAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<AccountsPage>
+  /** The transfers still in quarantine that an XRPL address received, in a Domain. */
+  listQuarantinedTransfers(options: {
+    account: string
+    ledgerId?: string
+    domainId: string
+  }): Promise<QuarantinedTransfer[]>
+  /** Dry-runs a release (v0_ReleaseQuarantinedTransfers); it has no fee estimate. */
+  dryRunRelease(request: ReleaseRequest): Promise<DryRunResult>
+  /** Proposes the release and returns as soon as the Backend accepted it, without waiting for approvals. */
+  proposeRelease(request: ReleaseRequest): Promise<{ intentId: string }>
   /**
    * Waits up to `timeoutMs` (default 30 s; 0 looks once) for the MPT issuance ID an MPTokenIssuanceCreate Intent
    * created. Custody records it a few seconds after the Intent executes; not being there yet is an outcome, not an error.
@@ -272,6 +288,8 @@ export type Connect = (connection: CustodyConnection) => Promise<CustodyBackend>
 /** A Native operation order as Custody dry-runs and proposes it. */
 export type TransactionOrderPayload = Extract<CustodyProposePayload, { type: 'v0_CreateTransactionOrder' }>
 
+export type ReleasePayload = Extract<CustodyProposePayload, { type: 'v0_ReleaseQuarantinedTransfers' }>
+
 /** The Ripple Custody API calls the adapter makes: simplexrpl in production, in memory in tests. */
 export interface CustodyApi {
   /** The account in the session's Domain that holds an XRPL address, if any. */
@@ -280,6 +298,10 @@ export interface CustodyApi {
   /** Proposes the payload as an Intent, whose id is the payload's `id`. */
   propose(payload: TransactionOrderPayload): Promise<{ intentId: string }>
   getMe(): Promise<Me>
+  dryRunRelease(payload: ReleasePayload): Promise<{ success: boolean; errors?: string[] }>
+  proposeRelease(payload: ReleasePayload): Promise<{ intentId: string }>
+  /** The quarantined transfers of an account (`quarantined: true`: the `quarantineStatus` filter 500s on some versions). */
+  listQuarantinedTransfers(options: { domainId: string; accountId: string }): Promise<QuarantinedTransfer[]>
   /** One page of a Domain's accounts. */
   getAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<{
     accounts: { id: string; alias: string }[]
@@ -340,6 +362,14 @@ export const rippleCustodyBackend = (api: CustodyApi, { domainId }: { domainId?:
       type: 'v0_CreateTransactionOrder',
     }
   }
+  const releasePayloadOf = async ({
+    account,
+    ledgerId,
+    transferIds,
+  }: ReleaseRequest): Promise<ReleasePayload | undefined> => {
+    const reference = await api.findAccount(account, ledgerId)
+    return reference && { type: 'v0_ReleaseQuarantinedTransfers', accountId: reference.accountId, transferIds }
+  }
   const noAccount = (account: string): DryRunResult => ({
     success: false,
     errors: [`No account in the Domain holds ${account}`],
@@ -388,6 +418,22 @@ export const rippleCustodyBackend = (api: CustodyApi, { domainId }: { domainId?:
       }
       return page.nextCursor ? { accounts, nextCursor: page.nextCursor } : { accounts }
     },
+    listQuarantinedTransfers: async ({ account, ledgerId, domainId }) => {
+      const reference = await api.findAccount(account, ledgerId)
+      if (!reference) throw new Error(`No account in the Domain holds ${account}`)
+      return api.listQuarantinedTransfers({ domainId, accountId: reference.accountId })
+    },
+    dryRunRelease: async request => {
+      const payload = await releasePayloadOf(request)
+      if (!payload) return noAccount(request.account)
+      const { success, errors } = await api.dryRunRelease(payload)
+      return { success, errors: errors ?? [] }
+    },
+    proposeRelease: async request => {
+      const payload = await releasePayloadOf(request)
+      if (!payload) throw new Error(`No account in the Domain holds ${request.account}`)
+      return api.proposeRelease(payload)
+    },
     getMptIssuanceId: async ({ intentId, domainId, timeoutMs = 30_000 }) => {
       const attempt = async () => {
         // The order id is the intentId. The list projection omits ledger data, so read each transaction in full.
@@ -424,6 +470,25 @@ const simplexrplCustodyApi = (custody: RippleCustody): CustodyApi => ({
         user: { id: domain.userReference.id, alias: domain.userReference.alias, roles: domain.userReference.roles },
       })),
     }
+  },
+  dryRunRelease: async payload => {
+    const result = await custody.api.dryRun(payload)
+    return { success: result.success, errors: result.errors }
+  },
+  proposeRelease: async payload => {
+    const { intentId } = await custody.api.propose(payload)
+    return { intentId }
+  },
+  listQuarantinedTransfers: async ({ domainId, accountId }) => {
+    const transfers: QuarantinedTransfer[] = []
+    for await (const transfer of custody.api.paginate('getTransfers', {
+      path: { domainId },
+      query: { accountId, quarantined: true, limit: 100 },
+    })) {
+      const { id, tickerId, value, registeredAt } = transfer
+      transfers.push({ id, tickerId, value, registeredAt })
+    }
+    return transfers
   },
   getAccounts: async ({ domainId, limit, cursor }) => {
     const page = await custody.api.call('getAccounts', { path: { domainId }, query: { limit, startingAfter: cursor } })

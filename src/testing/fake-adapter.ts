@@ -10,6 +10,8 @@ import type {
   Me,
   MptIssuanceIdOutcome,
   NativeOrder,
+  QuarantinedTransfer,
+  ReleaseRequest,
 } from '../backend/adapter'
 
 export const fakeMe: Me = {
@@ -29,6 +31,8 @@ export const createFakeAdapter = () => {
   const waits: { intentId: string; timeoutMs?: number }[] = []
   const dryRuns: NativeOrder[] = []
   const proposals: NativeOrder[] = []
+  const releases: (ReleaseRequest & { step: 'dryRun' | 'propose' })[] = []
+  const quarantineLookups: { account: string; ledgerId?: string; domainId: string }[] = []
   const issuanceLookups: { intentId: string; domainId: string; timeoutMs?: number }[] = []
   const clientWrites: { verb: string; params: unknown; options: ClientWriteOptions }[] = []
   const clientReads: { verb: string; params: unknown }[] = []
@@ -36,6 +40,8 @@ export const createFakeAdapter = () => {
   const state = {
     batchSigners: [] as BatchSigningRequirement[],
     issuance: { issuanceId: 'ISSUANCE-1' } as Omit<MptIssuanceIdOutcome, 'intentId'> | Error,
+    releaseDryRun: { success: true, errors: [] } as DryRunResult,
+    quarantined: [] as QuarantinedTransfer[],
     dryRunResult: { success: true, errors: [], estimatedFeeDrops: '12' } as DryRunResult,
     outcome: { intentId: '', status: 'Executed', isTerminal: true, isSuccess: true, reason: undefined } as
       IntentOutcome | Error,
@@ -74,6 +80,18 @@ export const createFakeAdapter = () => {
         proposals.push(order)
         return { intentId: `intent-${proposals.length}` }
       },
+      listQuarantinedTransfers: async lookup => {
+        quarantineLookups.push(lookup)
+        return state.quarantined
+      },
+      dryRunRelease: async request => {
+        releases.push({ step: 'dryRun', ...request })
+        return state.releaseDryRun
+      },
+      proposeRelease: async request => {
+        releases.push({ step: 'propose', ...request })
+        return { intentId: `release-${releases.filter(release => release.step === 'propose').length}` }
+      },
       getMptIssuanceId: async lookup => {
         issuanceLookups.push(lookup)
         if (state.issuance instanceof Error) throw state.issuance
@@ -110,6 +128,8 @@ export const createFakeAdapter = () => {
     setDomains,
     dryRuns,
     proposals,
+    releases,
+    quarantineLookups,
     waits,
     issuanceLookups,
     clientWrites,
