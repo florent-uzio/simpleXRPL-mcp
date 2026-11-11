@@ -129,12 +129,31 @@ type WriteVerbs = {
   'token.destroy': SimpleXRPLClient['token']['destroy']
   'account.set': SimpleXRPLClient['account']['set']
   'account.depositPreauth': SimpleXRPLClient['account']['depositPreauth']
+  'xrp.buyOffer': SimpleXRPLClient['xrp']['buyOffer']
+  'xrp.sellOffer': SimpleXRPLClient['xrp']['sellOffer']
+  'xrp.cancelOffer': SimpleXRPLClient['xrp']['cancelOffer']
+  'iou.buyOffer': SimpleXRPLClient['iou']['buyOffer']
+  'iou.sellOffer': SimpleXRPLClient['iou']['sellOffer']
+  'iou.cancelOffer': SimpleXRPLClient['iou']['cancelOffer']
+  'credential.issue': SimpleXRPLClient['credential']['issue']
+  'credential.accept': SimpleXRPLClient['credential']['accept']
+  'credential.delete': SimpleXRPLClient['credential']['delete']
+  'domain.create': SimpleXRPLClient['domain']['create']
+  'domain.setCredentials': SimpleXRPLClient['domain']['setCredentials']
+  'domain.delete': SimpleXRPLClient['domain']['delete']
+  'account.setRegularKey': SimpleXRPLClient['account']['setRegularKey']
 }
 type ReadVerbs = {
   'token.retrieve': SimpleXRPLClient['token']['retrieve']
   'token.list': SimpleXRPLClient['token']['list']
   'iou.retrieve': SimpleXRPLClient['iou']['retrieve']
   'account.retrieve': SimpleXRPLClient['account']['retrieve']
+  'account.listOffers': SimpleXRPLClient['account']['listOffers']
+  'iou.listOffers': SimpleXRPLClient['iou']['listOffers']
+  'credential.retrieve': SimpleXRPLClient['credential']['retrieve']
+  'credential.list': SimpleXRPLClient['credential']['list']
+  'domain.retrieve': SimpleXRPLClient['domain']['retrieve']
+  'domain.list': SimpleXRPLClient['domain']['list']
 }
 export type ClientWriteVerb = keyof WriteVerbs
 export type ClientReadVerb = keyof ReadVerbs
@@ -194,12 +213,31 @@ export const simplexrplClientVerbs = (client: SimpleXRPLClient): ClientVerbs => 
     'token.destroy': (params, options) => client.token.destroy(params, options),
     'account.set': (params, options) => client.account.set(params, options),
     'account.depositPreauth': (params, options) => client.account.depositPreauth(params, options),
+    'xrp.buyOffer': (params, options) => client.xrp.buyOffer(params, options),
+    'xrp.sellOffer': (params, options) => client.xrp.sellOffer(params, options),
+    'xrp.cancelOffer': (params, options) => client.xrp.cancelOffer(params, options),
+    'iou.buyOffer': (params, options) => client.iou.buyOffer(params, options),
+    'iou.sellOffer': (params, options) => client.iou.sellOffer(params, options),
+    'iou.cancelOffer': (params, options) => client.iou.cancelOffer(params, options),
+    'credential.issue': (params, options) => client.credential.issue(params, options),
+    'credential.accept': (params, options) => client.credential.accept(params, options),
+    'credential.delete': (params, options) => client.credential.delete(params, options),
+    'domain.create': (params, options) => client.domain.create(params, options),
+    'domain.setCredentials': (params, options) => client.domain.setCredentials(params, options),
+    'domain.delete': (params, options) => client.domain.delete(params, options),
+    'account.setRegularKey': (params, options) => client.account.setRegularKey(params, options),
   }
   const reads: { [Verb in ClientReadVerb]: (params: never) => Promise<unknown> } = {
     'token.retrieve': params => client.token.retrieve(params),
     'token.list': params => client.token.list(params),
     'iou.retrieve': params => client.iou.retrieve(params),
     'account.retrieve': params => client.account.retrieve(params),
+    'account.listOffers': params => client.account.listOffers(params),
+    'iou.listOffers': params => client.iou.listOffers(params),
+    'credential.retrieve': params => client.credential.retrieve(params),
+    'credential.list': params => client.credential.list(params),
+    'domain.retrieve': params => client.domain.retrieve(params),
+    'domain.list': params => client.domain.list(params),
   }
   return {
     write: async (verb, params, options) => {

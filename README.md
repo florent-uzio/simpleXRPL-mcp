@@ -65,10 +65,17 @@ The `client*` tools call simpleXRPL's Client verbs, the way a customer's code wo
 | `clientXrpTransfer`                                                                                                             | `propose`    | `client.xrp.transfer`                                                              |
 | `clientIouIssue`, `clientIouAuthorize`, `clientIouTransfer`, `clientIouClawback`                                                | `propose`    | `client.iou.issue`, `.authorize`, `.transfer`, `.clawback`                         |
 | `clientTokenIssue`, `clientTokenAuthorize`, `clientTokenTransfer`, `clientTokenLock`, `clientTokenUnlock`, `clientTokenDestroy` | `propose`    | `client.token.issue`, `.authorize`, `.transfer`, `.lock`, `.unlock`, `.destroy`    |
+| `clientXrpBuyOffer`, `clientXrpSellOffer`, `clientXrpCancelOffer`                                                               | `propose`    | `client.xrp.buyOffer`, `.sellOffer`, `.cancelOffer`                                |
+| `clientIouBuyOffer`, `clientIouSellOffer`, `clientIouCancelOffer`                                                               | `propose`    | `client.iou.buyOffer`, `.sellOffer`, `.cancelOffer`                                |
+| `clientCredentialIssue`, `clientCredentialAccept`, `clientCredentialDelete`                                                     | `propose`    | `client.credential.issue`, `.accept`, `.delete`                                    |
+| `clientDomainCreate`, `clientDomainSetCredentials`, `clientDomainDelete`                                                        | `propose`    | `client.domain.create`, `.setCredentials`, `.delete`                               |
+| `clientAccountSetRegularKey`                                                                                                    | `propose`    | `client.account.setRegularKey`                                                     |
 | `clientAccountSet`, `clientAccountDepositPreauth`                                                                               | `propose`    | `client.account.set`, `.depositPreauth`                                            |
+| `clientAccountListOffers`, `clientIouListOffers`                                                                                | `read`       | `client.account.listOffers`, `client.iou.listOffers`                               |
+| `clientCredentialRetrieve`, `clientCredentialList`, `clientDomainRetrieve`, `clientDomainList`                                  | `read`       | `client.credential.retrieve`, `.list`, `client.domain.retrieve`, `.list`           |
 | `clientTokenRetrieve`, `clientTokenList`, `clientIouRetrieve`, `clientAccountRetrieve`                                          | `read`       | `client.token.retrieve`, `.list`, `client.iou.retrieve`, `client.account.retrieve` |
 
-A client write always runs Custody's Dry run and then submits (there is no Dry-run-only mode), and waits for the outcome. Its result names the `verb`, the `route` (`native-operation` or `raw-signing`), `intentId`, `txHash` and `idempotencyKey`; pass the `idempotencyKey` back to retry without a duplicate. An Intent still awaiting approval when the wait ends comes back as `pending: true`: follow it with `waitForIntent`. `from` defaults to the Environment's `primary`. See [ADR-0003](docs/adr/0003-client-verb-tools-wait-and-always-dry-run.md).
+A client write always runs Custody's Dry run and then submits (there is no Dry-run-only mode), and waits for the outcome. Its result names the `verb`, the `route` (`native-operation` or `raw-signing`), `intentId`, `txHash` and `idempotencyKey`; pass the `idempotencyKey` back to retry without a duplicate. An Intent still awaiting approval when the wait ends comes back as `pending: true`: follow it with `waitForIntent`. `from` defaults to the Environment's `primary`. Cancelling an offer, credentials, permissioned domains and `setRegularKey` have no Native operation on Ripple Custody, so they need the Environment's `allowRawSigning` (see [Raw signing](#raw-signing)). See [ADR-0003](docs/adr/0003-client-verb-tools-wait-and-always-dry-run.md).
 
 ## Environments
 
@@ -143,7 +150,7 @@ What an Environment permits through this server:
 
 Write tools run a Dry run first and propose nothing if it fails. `xrpTransfer` only runs the Dry run unless you pass `dryRun: false`; then it returns the `intentId` at once. Approvers act later, so use `waitForIntent` to follow it.
 
-> In 0.1.0 no tool needs `approve` yet (there are no Approve or Reject tools), and no tool uses Raw signing yet. Both settings are accepted and reserved for later releases.
+> No tool needs `approve` yet (there are no Approve or Reject tools). Only the [client verb tools](#client-verb-tools) can use Raw signing.
 
 ## Raw signing
 

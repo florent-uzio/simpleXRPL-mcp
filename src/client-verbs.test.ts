@@ -170,6 +170,103 @@ describe('client verb writes', () => {
   })
 })
 
+describe('client verb writes with no Native operation, and offers', () => {
+  const price = { ticker: 'USD', issuer: 'rIssuer', amount: '5' }
+  const credList = [{ issuer: 'rIssuer', credType: 'KYC' }]
+  const calls: [string, Record<string, unknown>, string, unknown][] = [
+    ['clientAccountSetRegularKey', { regularKey: 'rKey' }, 'account.setRegularKey', { regularKey: 'rKey' }],
+    ['clientAccountSetRegularKey', {}, 'account.setRegularKey', {}],
+    [
+      'clientXrpBuyOffer',
+      { amount: '10', orderType: 'limit', price },
+      'xrp.buyOffer',
+      { amount: '10', orderType: 'limit', price },
+    ],
+    [
+      'clientXrpSellOffer',
+      { amount: '10', orderType: 'passive', price, domainID: 'DOM1', hybrid: false },
+      'xrp.sellOffer',
+      { amount: '10', orderType: 'passive', price, domainID: 'DOM1', hybrid: false },
+    ],
+    ['clientXrpCancelOffer', { offerSequence: 7 }, 'xrp.cancelOffer', { offerSequence: 7 }],
+    [
+      'clientIouBuyOffer',
+      { ticker: 'EUR', amount: '3', orderType: 'fok', price: { currency: 'XRP', amount: '1.5' } },
+      'iou.buyOffer',
+      { ticker: 'EUR', amount: '3', orderType: 'fok', price: { currency: 'XRP', amount: '1.5' } },
+    ],
+    [
+      'clientIouSellOffer',
+      { ticker: 'EUR', amount: '3', orderType: 'market', price, offerSequence: 4 },
+      'iou.sellOffer',
+      { ticker: 'EUR', amount: '3', orderType: 'market', price, offerSequence: 4 },
+    ],
+    ['clientIouCancelOffer', { offerSequence: 8 }, 'iou.cancelOffer', { offerSequence: 8 }],
+    [
+      'clientCredentialIssue',
+      { destination: 'rHolder', credType: 'KYC', expiration: 800000000, URI: 'https://kyc.example.com' },
+      'credential.issue',
+      { destination: 'rHolder', credType: 'KYC', expiration: 800000000, URI: 'https://kyc.example.com' },
+    ],
+    [
+      'clientCredentialAccept',
+      { credType: 'KYC', issuer: 'rIssuer' },
+      'credential.accept',
+      { credType: 'KYC', issuer: 'rIssuer' },
+    ],
+    [
+      'clientCredentialDelete',
+      { credType: 'KYC', holder: 'rHolder' },
+      'credential.delete',
+      { credType: 'KYC', holder: 'rHolder' },
+    ],
+    ['clientDomainCreate', { credList }, 'domain.create', { credList }],
+    ['clientDomainSetCredentials', { domain: 'DOM1', credList }, 'domain.setCredentials', { domain: 'DOM1', credList }],
+    ['clientDomainDelete', { domain: 'DOM1' }, 'domain.delete', { domain: 'DOM1' }],
+  ]
+
+  it('maps each tool to its verb and parameters, with a Dry run first', async () => {
+    await setup({ allowRawSigning: true })
+    for (const [tool, args, verb, params] of calls) {
+      await harness.call(tool, { environment: 'test', from: 'rActor', ...args })
+      expect(harness.adapter.clientWrites.at(-1)).toEqual({
+        verb,
+        params: expect.objectContaining(params as object),
+        options: { from: 'rActor', dryRun: true },
+      })
+    }
+  })
+
+  it('reports Raw signing being off as not supported', async () => {
+    await setup()
+    harness.adapter.state.clientWrite = {
+      status: 'failed',
+      code: 'not-supported',
+      message: 'CredentialCreate needs raw signing, which is disabled',
+    }
+    const result = await harness.call('clientCredentialIssue', {
+      environment: 'test',
+      destination: 'rHolder',
+      credType: 'KYC',
+    })
+    expect(result).toMatchObject({ error: { code: 'not-supported' } })
+  })
+
+  it('rejects a domain with no accepted credential, and an MPT offer price', async () => {
+    await setup()
+    await expect(harness.call('clientDomainCreate', { environment: 'test', credList: [] })).rejects.toThrow(/credList/)
+    await expect(
+      harness.call('clientXrpBuyOffer', {
+        environment: 'test',
+        amount: '1',
+        orderType: 'limit',
+        price: { mptIssuanceId: 'MPT1', amount: '1' },
+      }),
+    ).rejects.toThrow(/price/)
+    expect(harness.adapter.clientWrites).toEqual([])
+  })
+})
+
 describe('client verb reads', () => {
   it('read with the read Access level and the default Environment', async () => {
     await setup({ access: 'read' })
@@ -187,6 +284,24 @@ describe('client verb reads', () => {
       { verb: 'token.list', params: { role: 'issuer', account: 'rIssuer' } },
       { verb: 'iou.retrieve', params: { ticker: 'USD', issuer: 'rIssuer' } },
       { verb: 'account.retrieve', params: {} },
+    ])
+  })
+
+  it('map the offer, credential and domain reads to their verbs', async () => {
+    await setup()
+    await harness.call('clientAccountListOffers', { account: 'rTrader' })
+    await harness.call('clientIouListOffers', { ticker: 'USD', issuer: 'rIssuer' })
+    await harness.call('clientCredentialRetrieve', { credType: 'KYC', issuer: 'rIssuer', account: 'rHolder' })
+    await harness.call('clientCredentialList', { role: 'issuer' })
+    await harness.call('clientDomainRetrieve', { domainID: 'DOM1' })
+    await harness.call('clientDomainList', {})
+    expect(harness.adapter.clientReads).toMatchObject([
+      { verb: 'account.listOffers', params: { account: 'rTrader' } },
+      { verb: 'iou.listOffers', params: { ticker: 'USD', issuer: 'rIssuer' } },
+      { verb: 'credential.retrieve', params: { credType: 'KYC', issuer: 'rIssuer', account: 'rHolder' } },
+      { verb: 'credential.list', params: { role: 'issuer' } },
+      { verb: 'domain.retrieve', params: { domainID: 'DOM1' } },
+      { verb: 'domain.list', params: {} },
     ])
   })
 })

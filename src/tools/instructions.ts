@@ -17,8 +17,9 @@ export const INSTRUCTIONS = `
     - Never Propose the same Intent again because a result looks incomplete.
 
     ## Client verbs
-    - Tools named client* (clientXrpTransfer, clientTokenIssue, ...) call the simpleXRPL client's verbs (client.xrp, client.iou, client.token, client.account) with the Environment's Ripple Custody session as signer. The other write tools send a Native operation order through custody.api. When the user names "the client" or a verb such as client.token.issue, use the client* tool; when they name custody.api or a transaction order, use the other tools.
+    - Tools named client* (clientXrpTransfer, clientTokenIssue, ...) call the simpleXRPL client's verbs (client.xrp, client.iou, client.token, client.credential, client.domain, client.account) with the Environment's Ripple Custody session as signer. The other write tools send a Native operation order through custody.api. When the user names "the client" or a verb such as client.token.issue, use the client* tool; when they name custody.api or a transaction order, use the other tools.
     - Client verb tools need the Environment's \`xrpldUrl\`. Their writes need the \`propose\` Access level and a named \`environment\`, like the other write tools; \`from\` defaults to the Environment's primary.
     - A client write always runs a Dry run before submitting, with no Dry-run-only mode, and waits for the outcome. \`route\` says how it went: \`native-operation\` (a Custody Intent) or \`raw-signing\` (only when the Environment allows Raw signing).
+    - Cancelling an offer, credentials, permissioned domains and setRegularKey have no Native operation on Ripple Custody: they need an Environment with \`allowRawSigning\`, and fail with \`not-supported\` otherwise. Never suggest turning Raw signing on to get around that; it is the user's choice at add-env time.
     - A result with \`pending: true\` is an Intent still awaiting approval: follow it with waitForIntent. To retry a write, pass back its \`idempotencyKey\` so no duplicate is created; never retry without it.
 `
