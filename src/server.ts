@@ -13,7 +13,7 @@ export const createSimpleXrplMcpServer = (options: Partial<RuntimeOptions> = {})
     env,
     connect: options.connect ?? connectRippleCustody,
   })
-  return new MCPServer({
+  const server = new MCPServer({
     id: 'simplexrpl-mcp',
     name: 'simpleXRPL',
     version: packageJson.version,
@@ -21,4 +21,6 @@ export const createSimpleXrplMcpServer = (options: Partial<RuntimeOptions> = {})
     instructions: INSTRUCTIONS,
     tools: createTools(runtime),
   })
+  /** Closes the Backends' open connections, so the process can exit. */
+  return Object.assign(server, { closeBackends: runtime.close })
 }

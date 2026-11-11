@@ -19,6 +19,11 @@ export const environmentSchema = z.object({
   }),
   access: z.enum(ACCESS_LEVELS).default('read'),
   allowRawSigning: z.boolean().default(false),
+  /** WebSocket URL of the XRPL node the simpleXRPL client reads from; needed only by the client verb tools. */
+  xrpldUrl: z
+    .string()
+    .regex(/^wss?:\/\/.+/, { error: 'xrpldUrl must be a WebSocket URL (wss://...)' })
+    .optional(),
 })
 
 export type EnvironmentSettings = z.infer<typeof environmentSchema>

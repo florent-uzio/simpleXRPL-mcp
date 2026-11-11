@@ -1,6 +1,13 @@
+import {
+  DryRunFailedError,
+  IntentPendingError,
+  MultiStepFailureError,
+  SignerCapabilityError,
+  XrpldSubmitError,
+} from 'simplexrpl'
 import { describe, expect, it } from 'vitest'
 import { createInMemoryCustodyApi } from '../testing/in-memory-custody-api'
-import { rippleCustodyBackend, type CustodyTransaction, type NativeOrder } from './adapter'
+import { rippleCustodyBackend, simplexrplClientVerbs, type CustodyTransaction, type NativeOrder } from './adapter'
 
 const payment: NativeOrder = {
   account: 'rSender',
@@ -174,5 +181,65 @@ describe('Ripple Custody adapter: MPT issuance ID', () => {
       },
     }
     await expect(lookUp([executedIssuanceCreate, other])).rejects.toThrow('several MPT issuances')
+  })
+})
+
+describe('simpleXRPL client verbs', () => {
+  const dryRunResponse = { success: false } as unknown as ConstructorParameters<typeof DryRunFailedError>[1]
+  // Only the verb the test calls exists; the others are never reached.
+  const clientWhose = (transfer: () => Promise<unknown>) =>
+    simplexrplClientVerbs({ xrp: { transfer } } as unknown as Parameters<typeof simplexrplClientVerbs>[0])
+  const write = (transfer: () => Promise<unknown>) =>
+    clientWhose(transfer).write('xrp.transfer', { to: 'rTo', amount: '1' }, { dryRun: true })
+
+  it('keeps the route and ids of a submission, not the raw response', async () => {
+    const outcome = await write(async () => ({
+      source: 'custody',
+      intentId: 'i-1',
+      txHash: 'H',
+      idempotencyKey: 'k',
+      intent: { to: 'rTo', amount: '1' },
+      response: { big: true },
+    }))
+    expect(outcome).toEqual({
+      status: 'done',
+      source: 'custody',
+      intentId: 'i-1',
+      txHash: 'H',
+      idempotencyKey: 'k',
+      intent: { to: 'rTo', amount: '1' },
+    })
+  })
+
+  it('turns an Intent still pending at the timeout into a pending outcome', async () => {
+    const outcome = await write(() => Promise.reject(new IntentPendingError('i-2', 'ripple-custody', 'Open')))
+    expect(outcome).toEqual({ status: 'pending', intentId: 'i-2', lastState: 'Open' })
+  })
+
+  it('turns the errors a caller can act on into failed outcomes', async () => {
+    expect(await write(() => Promise.reject(new DryRunFailedError('no funds', dryRunResponse)))).toEqual({
+      status: 'failed',
+      code: 'dry-run-failed',
+      message: 'no funds',
+    })
+    expect(await write(() => Promise.reject(new SignerCapabilityError('raw signing is off')))).toMatchObject({
+      code: 'not-supported',
+    })
+    expect(await write(() => Promise.reject(new XrpldSubmitError('tecNO_LINE', {})))).toMatchObject({
+      code: 'ledger-rejected',
+      message: expect.stringContaining('tecNO_LINE'),
+    })
+    const failed = new MultiStepFailureError(
+      [{ source: 'custody', intentId: 'i-3', txHash: 'H3', intent: undefined, response: {} }],
+      { step: 2, error: new DryRunFailedError('no line', dryRunResponse) },
+    )
+    expect(await write(() => Promise.reject(failed))).toMatchObject({
+      code: 'multi-step-failed',
+      message: expect.stringMatching(/Step 2 .*no line.*H3/),
+    })
+  })
+
+  it('lets any other error through', async () => {
+    await expect(write(() => Promise.reject(new Error('socket closed')))).rejects.toThrow('socket closed')
   })
 })

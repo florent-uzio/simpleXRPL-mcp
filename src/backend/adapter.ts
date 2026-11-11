@@ -1,12 +1,19 @@
 // The only module that imports `simplexrpl` (pre-1.0, pinned): everything else uses this interface.
 import {
+  DryRunFailedError,
+  IntentPendingError,
+  MultiStepFailureError,
   RippleCustody,
+  SignerCapabilityError,
+  SimpleXRPL,
+  XrpldSubmitError,
   generateCustodyKeypair,
   uuidV7,
   type CustodyKeyAlgorithm,
   type CustodyProposePayload,
   type CustodyTransactionDryRun,
   type CustodyTransactionOrder,
+  type SimpleXRPLClient,
 } from 'simplexrpl'
 import { pollUntil, type Attempt } from './poll'
 
@@ -17,6 +24,7 @@ export type CustodyConnection = {
   primary: string
   signingKey: string
   allowRawSigning: boolean
+  xrpldUrl?: string
 }
 
 export type Me = {
@@ -100,6 +108,125 @@ export interface CustodyBackend {
    * created. Custody records it a few seconds after the Intent executes; not being there yet is an outcome, not an error.
    */
   getMptIssuanceId(options: { intentId: string; domainId: string; timeoutMs?: number }): Promise<MptIssuanceIdOutcome>
+  /** The simpleXRPL client over this Backend's session; absent when the Environment has no `xrpldUrl`. */
+  client?: () => Promise<ClientVerbs>
+  /** Releases what the Backend holds open (the client's XRPL connection). */
+  close?: () => Promise<void>
+}
+
+/** The client verbs the client verb tools call, as simpleXRPL types them. */
+type WriteVerbs = {
+  'xrp.transfer': SimpleXRPLClient['xrp']['transfer']
+  'iou.issue': SimpleXRPLClient['iou']['issue']
+  'iou.authorize': SimpleXRPLClient['iou']['authorize']
+  'iou.transfer': SimpleXRPLClient['iou']['transfer']
+  'iou.clawback': SimpleXRPLClient['iou']['clawback']
+  'token.issue': SimpleXRPLClient['token']['issue']
+  'token.authorize': SimpleXRPLClient['token']['authorize']
+  'token.transfer': SimpleXRPLClient['token']['transfer']
+  'token.lock': SimpleXRPLClient['token']['lock']
+  'token.unlock': SimpleXRPLClient['token']['unlock']
+  'token.destroy': SimpleXRPLClient['token']['destroy']
+  'account.set': SimpleXRPLClient['account']['set']
+  'account.depositPreauth': SimpleXRPLClient['account']['depositPreauth']
+}
+type ReadVerbs = {
+  'token.retrieve': SimpleXRPLClient['token']['retrieve']
+  'token.list': SimpleXRPLClient['token']['list']
+  'iou.retrieve': SimpleXRPLClient['iou']['retrieve']
+  'account.retrieve': SimpleXRPLClient['account']['retrieve']
+}
+export type ClientWriteVerb = keyof WriteVerbs
+export type ClientReadVerb = keyof ReadVerbs
+export type ClientWriteParams<Verb extends ClientWriteVerb> = Parameters<WriteVerbs[Verb]>[0]
+export type ClientReadParams<Verb extends ClientReadVerb> = NonNullable<Parameters<ReadVerbs[Verb]>[0]>
+export type ClientWriteOptions = { from?: string; idempotencyKey?: string; dryRun: boolean }
+
+/** How a client verb write ended, with simpleXRPL's errors the caller can act on turned into `failed`. */
+export type ClientWriteOutcome =
+  | {
+      status: 'done'
+      /** `custody`: a Native operation Intent; `xrpld`: Raw signing, submitted to the XRPL node. */
+      source: string
+      intentId?: string
+      txHash?: string
+      idempotencyKey?: string
+      intent: unknown
+    }
+  | { status: 'pending'; intentId: string; lastState: string }
+  | {
+      status: 'failed'
+      code: 'dry-run-failed' | 'not-supported' | 'ledger-rejected' | 'multi-step-failed'
+      message: string
+    }
+
+export interface ClientVerbs {
+  write<Verb extends ClientWriteVerb>(
+    verb: Verb,
+    params: ClientWriteParams<Verb>,
+    options: ClientWriteOptions,
+  ): Promise<ClientWriteOutcome>
+  read<Verb extends ClientReadVerb>(verb: Verb, params: ClientReadParams<Verb>): Promise<unknown>
+}
+
+type Submission = Awaited<ReturnType<WriteVerbs[ClientWriteVerb]>>
+const submitted = ({ source, intentId, txHash, idempotencyKey, intent }: Submission) => ({
+  source,
+  intentId,
+  txHash,
+  idempotencyKey,
+  intent,
+})
+
+/** The client verbs of a simpleXRPL client, with the errors a caller can act on returned as outcomes. */
+export const simplexrplClientVerbs = (client: SimpleXRPLClient): ClientVerbs => {
+  const writes: { [Verb in ClientWriteVerb]: (params: never, options: ClientWriteOptions) => Promise<Submission> } = {
+    'xrp.transfer': (params, options) => client.xrp.transfer(params, options),
+    'iou.issue': (params, options) => client.iou.issue(params, options),
+    'iou.authorize': (params, options) => client.iou.authorize(params, options),
+    'iou.transfer': (params, options) => client.iou.transfer(params, options),
+    'iou.clawback': (params, options) => client.iou.clawback(params, options),
+    'token.issue': (params, options) => client.token.issue(params, options),
+    'token.authorize': (params, options) => client.token.authorize(params, options),
+    'token.transfer': (params, options) => client.token.transfer(params, options),
+    'token.lock': (params, options) => client.token.lock(params, options),
+    'token.unlock': (params, options) => client.token.unlock(params, options),
+    'token.destroy': (params, options) => client.token.destroy(params, options),
+    'account.set': (params, options) => client.account.set(params, options),
+    'account.depositPreauth': (params, options) => client.account.depositPreauth(params, options),
+  }
+  const reads: { [Verb in ClientReadVerb]: (params: never) => Promise<unknown> } = {
+    'token.retrieve': params => client.token.retrieve(params),
+    'token.list': params => client.token.list(params),
+    'iou.retrieve': params => client.iou.retrieve(params),
+    'account.retrieve': params => client.account.retrieve(params),
+  }
+  return {
+    write: async (verb, params, options) => {
+      try {
+        return { status: 'done', ...submitted(await writes[verb](params as never, options)) }
+      } catch (cause) {
+        if (cause instanceof IntentPendingError)
+          return { status: 'pending', intentId: cause.intentId, lastState: cause.lastState }
+        if (cause instanceof DryRunFailedError)
+          return { status: 'failed', code: 'dry-run-failed', message: cause.message }
+        if (cause instanceof SignerCapabilityError)
+          return { status: 'failed', code: 'not-supported', message: cause.message }
+        if (cause instanceof XrpldSubmitError)
+          return { status: 'failed', code: 'ledger-rejected', message: `${cause.engineResult}: ${cause.message}` }
+        if (cause instanceof MultiStepFailureError) {
+          const committed = cause.committed.map(step => step.txHash ?? step.intentId).join(', ') || 'none'
+          return {
+            status: 'failed',
+            code: 'multi-step-failed',
+            message: `Step ${cause.failed.step} failed (${cause.failed.error.message}); committed before it: ${committed}`,
+          }
+        }
+        throw cause
+      }
+    },
+    read: (verb, params) => reads[verb](params as never),
+  }
 }
 
 export type Connect = (connection: CustodyConnection) => Promise<CustodyBackend>
@@ -314,7 +441,25 @@ export const connectRippleCustody: Connect = async connection => {
     primary: connection.primary,
     allowRawSigning: connection.allowRawSigning,
   })
-  return rippleCustodyBackend(simplexrplCustodyApi(custody), { domainId: connection.domainId })
+  const backend = rippleCustodyBackend(simplexrplCustodyApi(custody), { domainId: connection.domainId })
+  const { xrpldUrl } = connection
+  if (!xrpldUrl) return backend
+  // Built on first use and kept: the client holds a WebSocket to the XRPL node. A failed init is retried next time.
+  let client: Promise<SimpleXRPLClient> | undefined
+  const clientOf = () => {
+    client ??= SimpleXRPL.init({ xrpldUrl, signers: [custody] })
+    client.catch(() => (client = undefined))
+    return client
+  }
+  return {
+    ...backend,
+    client: async () => simplexrplClientVerbs(await clientOf()),
+    close: async () => {
+      const open = client
+      client = undefined
+      await (await open?.catch(() => undefined))?.disconnect()
+    },
+  }
 }
 
 export type { CustodyKeyAlgorithm }

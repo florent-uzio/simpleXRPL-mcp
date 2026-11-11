@@ -56,6 +56,20 @@ Requires Node.js 22.13 or later.
 
 Write tools must name their `environment`; they never use the default.
 
+### Client verb tools
+
+The `client*` tools call simpleXRPL's Client verbs, the way a customer's code would after `SimpleXRPL.init({ xrpldUrl, signers: [custody] })`, with the Environment's Ripple Custody session as signer. Use them to check how each verb routes through Custody; the tools above send a Native operation order through `custody.api` instead. They need the Environment's `xrpldUrl`.
+
+| Tool                                                                                                                            | Access level | Client verb                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
+| `clientXrpTransfer`                                                                                                             | `propose`    | `client.xrp.transfer`                                                              |
+| `clientIouIssue`, `clientIouAuthorize`, `clientIouTransfer`, `clientIouClawback`                                                | `propose`    | `client.iou.issue`, `.authorize`, `.transfer`, `.clawback`                         |
+| `clientTokenIssue`, `clientTokenAuthorize`, `clientTokenTransfer`, `clientTokenLock`, `clientTokenUnlock`, `clientTokenDestroy` | `propose`    | `client.token.issue`, `.authorize`, `.transfer`, `.lock`, `.unlock`, `.destroy`    |
+| `clientAccountSet`, `clientAccountDepositPreauth`                                                                               | `propose`    | `client.account.set`, `.depositPreauth`                                            |
+| `clientTokenRetrieve`, `clientTokenList`, `clientIouRetrieve`, `clientAccountRetrieve`                                          | `read`       | `client.token.retrieve`, `.list`, `client.iou.retrieve`, `client.account.retrieve` |
+
+A client write always runs Custody's Dry run and then submits (there is no Dry-run-only mode), and waits for the outcome. Its result names the `verb`, the `route` (`native-operation` or `raw-signing`), `intentId`, `txHash` and `idempotencyKey`; pass the `idempotencyKey` back to retry without a duplicate. An Intent still awaiting approval when the wait ends comes back as `pending: true`: follow it with `waitForIntent`. `from` defaults to the Environment's `primary`. See [ADR-0003](docs/adr/0003-client-verb-tools-wait-and-always-dry-run.md).
+
 ## Environments
 
 An **Environment** is a named signing setup: one Backend (today only Ripple Custody) with its credentials and settings. Environments live in `~/.config/simplexrpl-mcp/config.json` (override the path with `SIMPLEXRPL_MCP_CONFIG`). The file is read on every use, so edits apply without a restart, and one invalid entry never hides the others.
@@ -72,7 +86,8 @@ An **Environment** is a named signing setup: one Backend (today only Ripple Cust
       "primary": "rPrimaryAddress",
       "keyRef": "keychain:prod",
       "access": "propose",
-      "allowRawSigning": false
+      "allowRawSigning": false,
+      "xrpldUrl": "wss://s.altnet.rippletest.net:51233"
     }
   }
 }
@@ -99,6 +114,7 @@ Anything not given as an option is asked for. It checks the credentials with `ge
 | `--domain <id>`                   | The default Domain. Optional: without it, the Domains from `getMe` are listed and you may pick one or skip.       |
 | `--access read\|propose\|approve` | The Access level (default `read`).                                                                                |
 | `--allow-raw-signing`             | Allow Raw signing. Only asked about above `read`; `--no-allow-raw-signing` refuses.                               |
+| `--xrpld-url <wss-url>`           | XRPL node WebSocket URL for the client verb tools. Asked for; Enter for none.                                     |
 | `--force`                         | Replace an existing Environment without asking.                                                                   |
 
 The private key comes from one source:
@@ -114,6 +130,8 @@ The private key comes from one source:
 A generated key is kept before its public key is shown, so it is not lost if the check fails: the error says how to retry with it (`--keychain-item` or `--import`). A key you import is stored only after the check succeeds. The Keychain stores need macOS; on other systems use `--store file` or `--env-var`. The Keychain stores the key as `b64:<base64>`; an entry without that prefix, or a PEM another tool stored as hex, is read as is.
 
 > `simplexrpl` requires a `primary` address that already exists in the Custody domain, so a brand-new instance needs one XRPL account created first (in the Custody UI) before `add-env` can verify anything.
+
+`xrpldUrl` is optional: the WebSocket URL of the XRPL node the [client verb tools](#client-verb-tools) connect to. Set it with `add-env --xrpld-url`, or edit the config file.
 
 ## Access levels
 

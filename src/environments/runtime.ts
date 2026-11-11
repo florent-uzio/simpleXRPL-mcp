@@ -44,6 +44,8 @@ export const createRuntime = ({ configPath, env, connect, keychain = macosKeycha
     const fingerprint = createHash('sha256').update(JSON.stringify({ settings, signingKey })).digest('hex')
     const cached = backends.get(name)
     if (cached?.fingerprint === fingerprint) return cached.backend
+    // The settings or key changed: release the old Backend's connections before replacing it.
+    cached?.backend.then(old => old.close?.()).catch(() => {})
     const backend = connect({ ...settings, signingKey })
     backends.set(name, { fingerprint, backend })
     // A failed connection is not remembered: fixing the key or the config takes effect on the next call.
@@ -71,6 +73,13 @@ export const createRuntime = ({ configPath, env, connect, keychain = macosKeycha
   }
 
   return {
+    /** Releases every connected Backend's open connections, for shutdown. */
+    close: async () => {
+      const open = [...backends.values()]
+      backends.clear()
+      await Promise.allSettled(open.map(async ({ backend }) => (await backend).close?.()))
+    },
+
     /** Declared Environments. Never reads a Key reference. */
     list: () => loadEnvironments(configPath, env),
 

@@ -21,6 +21,7 @@ const Q = {
   primary: 'Primary address (an XRPL address in your Custody domain)',
   access: 'Access level (read, propose, approve)',
   raw: 'Allow Raw signing, which Custody policies cannot inspect? (y/N)',
+  xrpldUrl: 'XRPL node WebSocket URL for the client verb tools (Enter for none)',
   source: 'Private key: generate, import, keychain-item or env [generate]',
   store: 'Store the key in (keychain, file) [keychain]',
   keyFile: 'Private key file (PEM)',
@@ -101,6 +102,7 @@ describe('add-env settings', () => {
       allowRawSigning: true,
       domain: 'd-1',
       import: t.keyPath,
+      xrpldUrl: 'wss://s.altnet.rippletest.net:51233',
     })
     expect(t.asked).toEqual([])
     expect((await t.config()).environments.prod).toMatchObject({
@@ -109,7 +111,25 @@ describe('add-env settings', () => {
       access: 'approve',
       allowRawSigning: true,
       domainId: 'd-1',
+      xrpldUrl: 'wss://s.altnet.rippletest.net:51233',
     })
+  })
+
+  it('saves the XRPL node URL when one is given, and none when it is left blank', async () => {
+    const t = await setup()
+    await t.run()
+    expect(t.asked).toContain(Q.xrpldUrl)
+    expect((await t.config()).environments.prod.xrpldUrl).toBeUndefined()
+
+    t.answers[Q.xrpldUrl] = 'wss://s.altnet.rippletest.net:51233'
+    await t.run({ force: true })
+    expect((await t.config()).environments.prod.xrpldUrl).toBe('wss://s.altnet.rippletest.net:51233')
+  })
+
+  it('rejects an XRPL node URL that is not a WebSocket URL', async () => {
+    const t = await setup()
+    await expect(t.run({ xrpldUrl: 'https://s.altnet.rippletest.net' })).rejects.toThrow(/WebSocket/)
+    expect(t.adapter.connections).toEqual([])
   })
 
   it('asks about Raw signing only above the read Access level', async () => {

@@ -15,6 +15,7 @@ Anything not given as an option is asked for.
   --domain <id>                default Domain
   --access read|propose|approve
   --allow-raw-signing          allow Raw signing (--no-allow-raw-signing to refuse)
+  --xrpld-url <wss-url>        XRPL node for the client verb tools
 
 Private key (one source):
   (default)                    generate a key; --algorithm ed25519|secp256k1|secp256r1
@@ -40,6 +41,7 @@ export const runAddEnvCommand = async (args: string[]) => {
         domain: { type: 'string' },
         access: { type: 'string' },
         'allow-raw-signing': { type: 'boolean' },
+        'xrpld-url': { type: 'string' },
         algorithm: { type: 'string' },
         import: { type: 'string' },
         store: { type: 'string' },
@@ -76,6 +78,7 @@ export const runAddEnvCommand = async (args: string[]) => {
         domain: values.domain,
         access: values.access,
         allowRawSigning: values['allow-raw-signing'],
+        xrpldUrl: values['xrpld-url'],
         algorithm: values.algorithm,
         import: values.import,
         store: values.store,
