@@ -1,5 +1,21 @@
 # @florent-uzio/simplexrpl-mcp
 
+## 0.5.0
+
+### Minor Changes
+
+- f3d722d: Batch entries now take the same input, in the same units, as the standalone tool for their operation.
+  
+  - **Breaking:** a Batch `Payment` entry takes a decimal XRP amount, like `payment`, instead of drops, and must name its `currency` (`XRP`, `IOU`, `MPT` or `Ticker`) instead of passing an `issuanceId`. An entry in the old format is refused, not misread.
+  - A Batch `Payment` entry can now pay an IOU or a Custody ticker, and pay a Custody account or endpoint by its id.
+  - A Batch can now hold `MPTokenIssuanceCreate`, `MPTokenIssuanceSet` and `MPTokenIssuanceDestroy` entries, with the same input as their tools.
+- d010469: Add the remaining client verb tools: DEX offers (`clientXrpBuyOffer`, `clientXrpSellOffer`, `clientXrpCancelOffer`, `clientIouBuyOffer`, `clientIouSellOffer`, `clientIouCancelOffer`), credentials (`clientCredentialIssue`, `clientCredentialAccept`, `clientCredentialDelete`), permissioned domains (`clientDomainCreate`, `clientDomainSetCredentials`, `clientDomainDelete`) and `clientAccountSetRegularKey`, with the reads `clientAccountListOffers`, `clientIouListOffers`, `clientCredentialRetrieve`, `clientCredentialList`, `clientDomainRetrieve` and `clientDomainList`. Cancelling an offer, credentials, domains and `setRegularKey` go through Raw signing on Ripple Custody, so they need an Environment with `allowRawSigning`.
+- 9dec043: Add client verb tools (`clientXrpTransfer`, `clientIouIssue`, `clientIouAuthorize`, `clientIouTransfer`, `clientIouClawback`, `clientTokenIssue`, `clientTokenAuthorize`, `clientTokenTransfer`, `clientTokenLock`, `clientTokenUnlock`, `clientTokenDestroy`, `clientAccountSet`, `clientAccountDepositPreauth`, and the reads `clientTokenRetrieve`, `clientTokenList`, `clientIouRetrieve`, `clientAccountRetrieve`). They call simpleXRPL's client verbs with the Environment's Ripple Custody session as signer, and report the route each write took (`native-operation` or `raw-signing`). They need the new optional Environment setting `xrpldUrl` (`add-env --xrpld-url`), shown by `listEnvironments`. Client writes always Dry-run before submitting and wait for the outcome; an Intent still awaiting approval comes back as `pending` (ADR-0003).
+
+### Patch Changes
+
+- 182525f: `xrpTransfer` now Dry-runs the same native Payment order it Proposes. A `from` address that no account in the Domain holds now fails the Dry run with "No account in the Domain holds …".
+
 ## 0.4.0
 
 ### Minor Changes
