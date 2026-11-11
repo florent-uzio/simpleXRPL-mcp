@@ -2,7 +2,9 @@
 import {
   RippleCustody,
   generateCustodyKeypair,
+  uuidV7,
   type CustodyKeyAlgorithm,
+  type CustodyProposePayload,
   type CustodyTransactionDryRun,
   type CustodyTransactionOrder,
 } from 'simplexrpl'
@@ -79,26 +81,6 @@ export type CustodyTransaction = {
   } | null
 }
 
-/**
- * The MPT issuance ID created by an Intent, from the detailed transactions its order produced.
- * Pending until Custody has registered the transaction and filled in its ledger data; throws when it never will.
- */
-export const mptIssuanceIdOf = (intentId: string, transactions: CustodyTransaction[]): Attempt<string> => {
-  const ledgerData = transactions.flatMap(({ ledgerTransactionData }) =>
-    ledgerTransactionData?.ledgerData?.type === 'Xrpl' ? [ledgerTransactionData.ledgerData] : [],
-  )
-  // Other MPT transactions carry the issuance they act on: only a create's is the one this Intent made.
-  const other = ledgerData.find(data => data.transactionType && data.transactionType !== 'MPTokenIssuanceCreate')
-  if (other)
-    throw new Error(`Intent ${intentId} is not an MPTokenIssuanceCreate: its transaction is ${other.transactionType}.`)
-  const ids = new Set(ledgerData.flatMap(data => (data.tokenData ? [data.tokenData.issuanceId] : [])))
-  if (ids.size > 1) throw new Error(`Intent ${intentId} produced several MPT issuances: ${[...ids].join(', ')}.`)
-  if (ids.size === 1) return { value: [...ids][0] }
-  return transactions.length === 0
-    ? { pending: `No transaction is registered yet for Intent ${intentId}.` }
-    : { pending: `The transaction of Intent ${intentId} carries no MPT issuance ID yet.` }
-}
-
 /** The MPT issuance an Intent created, or why it is not readable yet when the wait ran out. */
 export type MptIssuanceIdOutcome = { intentId: string; issuanceId?: string; reason?: string }
 
@@ -122,27 +104,66 @@ export interface CustodyBackend {
 
 export type Connect = (connection: CustodyConnection) => Promise<CustodyBackend>
 
-export const connectRippleCustody: Connect = async connection => {
-  const custody = await RippleCustody.create({
-    gatewayUrl: connection.rippleCustodyApiUrl,
-    auth: { tokenUrl: connection.rippleCustodyTokenUrl, signingKey: connection.signingKey },
-    domainId: connection.domainId,
-    primary: connection.primary,
-    allowRawSigning: connection.allowRawSigning,
-  })
-  // The library only dry-runs xrpl transactions, which cannot carry every native operation, so build the order here.
-  const dryRunNative = async (order: NativeOrder): Promise<CustodyTransactionDryRun | undefined> => {
-    const reference = await custody.api.findByAddress(order.account, {
-      ledgerId: order.ledgerId,
-      domainId: connection.domainId,
-    })
+/** A Native operation order as Custody dry-runs and proposes it. */
+export type TransactionOrderPayload = Extract<CustodyProposePayload, { type: 'v0_CreateTransactionOrder' }>
+
+/** The Ripple Custody API calls the adapter makes: simplexrpl in production, in memory in tests. */
+export interface CustodyApi {
+  /** The account in the session's Domain that holds an XRPL address, if any. */
+  findAccount(address: string, ledgerId?: string): Promise<{ accountId: string; ledgerId: string } | undefined>
+  dryRun(payload: TransactionOrderPayload): Promise<CustodyTransactionDryRun>
+  /** Proposes the payload as an Intent, whose id is the payload's `id`. */
+  propose(payload: TransactionOrderPayload): Promise<{ intentId: string }>
+  getMe(): Promise<Me>
+  /** One page of a Domain's accounts. */
+  getAccounts(options: { domainId: string; limit?: number; cursor?: string }): Promise<{
+    accounts: { id: string; alias: string }[]
+    nextCursor?: string
+  }>
+  /** Every ledger, with its type (`XRPL`, ...). */
+  listLedgers(): Promise<{ id: string; type: string }[]>
+  /** Every address of an account. */
+  listAddresses(options: {
+    domainId: string
+    accountId: string
+  }): Promise<{ address: string; ledgerId: string; scope: string }[]>
+  /** The ids of the transactions an order produced. */
+  listOrderTransactionIds(options: { domainId: string; orderId: string }): Promise<string[]>
+  getTransaction(options: { domainId: string; transactionId: string }): Promise<CustodyTransaction>
+  waitForIntent(intentId: string, options: { timeoutMs?: number }): Promise<IntentOutcome>
+}
+
+/**
+ * The MPT issuance ID created by an Intent, from the detailed transactions its order produced.
+ * Pending until Custody has registered the transaction and filled in its ledger data; throws when it never will.
+ */
+const mptIssuanceIdOf = (intentId: string, transactions: CustodyTransaction[]): Attempt<string> => {
+  const ledgerData = transactions.flatMap(({ ledgerTransactionData }) =>
+    ledgerTransactionData?.ledgerData?.type === 'Xrpl' ? [ledgerTransactionData.ledgerData] : [],
+  )
+  // Other MPT transactions carry the issuance they act on: only a create's is the one this Intent made.
+  const other = ledgerData.find(data => data.transactionType && data.transactionType !== 'MPTokenIssuanceCreate')
+  if (other)
+    throw new Error(`Intent ${intentId} is not an MPTokenIssuanceCreate: its transaction is ${other.transactionType}.`)
+  const ids = new Set(ledgerData.flatMap(data => (data.tokenData ? [data.tokenData.issuanceId] : [])))
+  if (ids.size > 1) throw new Error(`Intent ${intentId} produced several MPT issuances: ${[...ids].join(', ')}.`)
+  if (ids.size === 1) return { value: [...ids][0] }
+  return transactions.length === 0
+    ? { pending: `No transaction is registered yet for Intent ${intentId}.` }
+    : { pending: `The transaction of Intent ${intentId} carries no MPT issuance ID yet.` }
+}
+
+/** The Ripple Custody Backend over the Custody API calls it makes. */
+export const rippleCustodyBackend = (api: CustodyApi, { domainId }: { domainId?: string }): CustodyBackend => {
+  // Built once for both, so the Dry run checks exactly the order that would be proposed. Same defaults as simplexrpl.
+  const payloadOf = async (order: NativeOrder): Promise<TransactionOrderPayload | undefined> => {
+    const reference = await api.findAccount(order.account, order.ledgerId)
     if (!reference) return undefined
-    return (await custody.api.dryRun({
-      id: crypto.randomUUID(),
+    return {
+      id: uuidV7(),
       accountId: reference.accountId,
       ledgerId: reference.ledgerId,
       parameters: {
-        // Same defaults as proposeTransactionOrder, so the Dry run checks the order that would be proposed.
         feeStrategy: order.feeStrategy ?? { priority: 'Low', type: 'Priority' },
         maximumFee: order.maximumFee,
         sourceTag: order.sourceTag,
@@ -152,7 +173,7 @@ export const connectRippleCustody: Connect = async connection => {
       },
       customProperties: {},
       type: 'v0_CreateTransactionOrder',
-    })) as CustodyTransactionDryRun
+    }
   }
   const noAccount = (account: string): DryRunResult => ({
     success: false,
@@ -166,8 +187,9 @@ export const connectRippleCustody: Connect = async connection => {
   return {
     dryRun: async order => {
       const isBatch = order.operation.type === 'Batch'
-      const dryRun = await dryRunNative(order)
-      if (!dryRun) return isBatch ? { ...noAccount(order.account), signers: [] } : noAccount(order.account)
+      const payload = await payloadOf(order)
+      if (!payload) return isBatch ? { ...noAccount(order.account), signers: [] } : noAccount(order.account)
+      const dryRun = await api.dryRun(payload)
       if (!isBatch) return summarize(dryRun)
       const signing = dryRun.estimate.type === 'XRPL' ? dryRun.estimate.batchSigningData : undefined
       return {
@@ -181,73 +203,118 @@ export const connectRippleCustody: Connect = async connection => {
       }
     },
     propose: async order => {
-      const { intentId } = await custody.api.proposeTransactionOrder(order)
-      return { intentId }
+      const payload = await payloadOf(order)
+      if (!payload) throw new Error(`No account in the Domain holds ${order.account}`)
+      return api.propose(payload)
     },
-    domainId: connection.domainId,
+    domainId,
     listAccounts: async ({ domainId, limit, cursor }) => {
-      const page = await custody.api.call('getAccounts', {
-        path: { domainId },
-        query: { limit, startingAfter: cursor },
-      })
-      // Cost: one ledger lookup per page and one address call per account (Custody's max page size is 100).
+      const page = await api.getAccounts({ domainId, limit, cursor })
       // Only addresses on XRPL ledgers count as XRPL addresses.
-      const xrplLedgers = new Set<string>()
-      for await (const ledger of custody.api.paginate('getLedgers', { query: { limit: 100 } })) {
-        if (ledger.data.parameters.type === 'XRPL') xrplLedgers.add(ledger.data.id)
-      }
+      const xrplLedgers = new Set(
+        (await api.listLedgers()).filter(ledger => ledger.type === 'XRPL').map(({ id }) => id),
+      )
       const accounts: AccountSummary[] = []
-      for (const item of page.items) {
-        const addresses: AccountSummary['addresses'] = []
-        for await (const entry of custody.api.paginate('getAddresses', {
-          path: { domainId, accountId: item.data.id },
-          query: { limit: 100 },
-        })) {
-          if (entry.data.scope === 'External' && xrplLedgers.has(entry.data.ledgerId)) {
-            addresses.push({ address: entry.data.address, ledgerId: entry.data.ledgerId })
-          }
-        }
-        accounts.push({ id: item.data.id, alias: item.data.alias, addresses })
+      for (const { id, alias } of page.accounts) {
+        const addresses = (await api.listAddresses({ domainId, accountId: id }))
+          .filter(entry => entry.scope === 'External' && xrplLedgers.has(entry.ledgerId))
+          .map(({ address, ledgerId }) => ({ address, ledgerId }))
+        accounts.push({ id, alias, addresses })
       }
-      return page.nextStartingAfter ? { accounts, nextCursor: page.nextStartingAfter } : { accounts }
+      return page.nextCursor ? { accounts, nextCursor: page.nextCursor } : { accounts }
     },
     getMptIssuanceId: async ({ intentId, domainId, timeoutMs = 30_000 }) => {
       const attempt = async () => {
         // The order id is the intentId. The list projection omits ledger data, so read each transaction in full.
-        const { items } = await custody.api.call('getTransactions', {
-          path: { domainId },
-          query: { 'orderReference.Id': intentId },
-        })
+        const ids = await api.listOrderTransactionIds({ domainId, orderId: intentId })
         const transactions = await Promise.all(
-          items.map(item => custody.api.call('getTransaction', { path: { domainId, transactionId: item.id } })),
+          ids.map(transactionId => api.getTransaction({ domainId, transactionId })),
         )
         return mptIssuanceIdOf(intentId, transactions)
       }
       const result = await pollUntil(attempt, { timeoutMs, intervalMs: 3000 })
       return 'value' in result ? { intentId, issuanceId: result.value } : { intentId, reason: result.pending }
     },
-    getMe: async () => {
-      const me = await custody.api.call('getMe')
-      return {
-        publicKey: me.publicKey,
-        domains: me.domains.map(domain => ({
-          id: domain.id,
-          alias: domain.alias,
-          user: { id: domain.userReference.id, alias: domain.userReference.alias, roles: domain.userReference.roles },
-        })),
-      }
-    },
-    waitForIntent: async (intentId, options) => {
-      const outcome = await custody.api.waitForIntent(intentId, { timeoutMs: options?.timeoutMs })
-      return {
-        intentId: outcome.intentId,
-        status: outcome.status,
-        isTerminal: outcome.isTerminal,
-        isSuccess: outcome.isSuccess,
-        reason: outcome.reason,
-      }
-    },
+    getMe: () => api.getMe(),
+    waitForIntent: (intentId, options) => api.waitForIntent(intentId, { timeoutMs: options?.timeoutMs }),
   }
+}
+
+/** The Custody API calls of a simplexrpl Ripple Custody session. Kept to plain mapping: the logic is above. */
+const simplexrplCustodyApi = (custody: RippleCustody): CustodyApi => ({
+  // The Domain the session proposes in, as simplexrpl's own sender lookup does.
+  findAccount: (address, ledgerId) => custody.api.findByAddress(address, { ledgerId, domainId: custody.domainId }),
+  dryRun: async payload => (await custody.api.dryRun(payload)) as CustodyTransactionDryRun,
+  propose: async payload => {
+    const { intentId } = await custody.api.propose(payload)
+    return { intentId }
+  },
+  getMe: async () => {
+    const me = await custody.api.call('getMe')
+    return {
+      publicKey: me.publicKey,
+      domains: me.domains.map(domain => ({
+        id: domain.id,
+        alias: domain.alias,
+        user: { id: domain.userReference.id, alias: domain.userReference.alias, roles: domain.userReference.roles },
+      })),
+    }
+  },
+  getAccounts: async ({ domainId, limit, cursor }) => {
+    const page = await custody.api.call('getAccounts', { path: { domainId }, query: { limit, startingAfter: cursor } })
+    return {
+      accounts: page.items.map(item => ({ id: item.data.id, alias: item.data.alias })),
+      nextCursor: page.nextStartingAfter,
+    }
+  },
+  // Custody's max page size is 100.
+  listLedgers: async () => {
+    const ledgers: { id: string; type: string }[] = []
+    for await (const ledger of custody.api.paginate('getLedgers', { query: { limit: 100 } })) {
+      ledgers.push({ id: ledger.data.id, type: ledger.data.parameters.type })
+    }
+    return ledgers
+  },
+  listAddresses: async ({ domainId, accountId }) => {
+    const addresses: { address: string; ledgerId: string; scope: string }[] = []
+    for await (const entry of custody.api.paginate('getAddresses', {
+      path: { domainId, accountId },
+      query: { limit: 100 },
+    })) {
+      addresses.push({ address: entry.data.address, ledgerId: entry.data.ledgerId, scope: entry.data.scope })
+    }
+    return addresses
+  },
+  listOrderTransactionIds: async ({ domainId, orderId }) => {
+    const { items } = await custody.api.call('getTransactions', {
+      path: { domainId },
+      query: { 'orderReference.Id': orderId },
+    })
+    return items.map(item => item.id)
+  },
+  getTransaction: ({ domainId, transactionId }) =>
+    custody.api.call('getTransaction', { path: { domainId, transactionId } }),
+  waitForIntent: async (intentId, { timeoutMs }) => {
+    const outcome = await custody.api.waitForIntent(intentId, { timeoutMs })
+    return {
+      intentId: outcome.intentId,
+      status: outcome.status,
+      isTerminal: outcome.isTerminal,
+      isSuccess: outcome.isSuccess,
+      reason: outcome.reason,
+    }
+  },
+})
+
+export const connectRippleCustody: Connect = async connection => {
+  const custody = await RippleCustody.create({
+    gatewayUrl: connection.rippleCustodyApiUrl,
+    auth: { tokenUrl: connection.rippleCustodyTokenUrl, signingKey: connection.signingKey },
+    domainId: connection.domainId,
+    primary: connection.primary,
+    allowRawSigning: connection.allowRawSigning,
+  })
+  return rippleCustodyBackend(simplexrplCustodyApi(custody), { domainId: connection.domainId })
 }
 
 export type { CustodyKeyAlgorithm }
