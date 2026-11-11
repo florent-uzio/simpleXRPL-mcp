@@ -113,6 +113,34 @@ const decimal = (what: string) =>
 const ticker = z.string().min(1).describe("Currency code, e.g. 'USD'; longer codes are hex-encoded")
 const mptIssuanceId = z.string().min(1).describe('MPT issuance ID')
 
+/** For the verbs with no Native operation on Ripple Custody. */
+const RAW =
+  "Ripple Custody has no Native operation for it, so it needs the Environment's `allowRawSigning` (otherwise `not-supported`)."
+
+const iouPrice = z.object({
+  ticker,
+  issuer: address('Issuer r-address'),
+  amount: decimal('Amount of the IOU'),
+})
+const offerPrice = z.union([z.object({ currency: z.literal('XRP'), amount: xrpAmount }), iouPrice])
+const offerShape = {
+  orderType: z
+    .enum(['limit', 'market', 'fok', 'passive'])
+    .describe(
+      'limit: placed as is; market: fills now or is cancelled; fok: fills completely or is cancelled; passive: never crosses a matching offer',
+    ),
+  domainID: z.string().optional().describe('Permissioned domain ID; the open DEX when omitted'),
+  hybrid: z.boolean().optional().describe('With domainID, whether the offer also works the open DEX (default true)'),
+  offerSequence: z.number().int().min(0).optional().describe('Sequence of an earlier offer to replace'),
+}
+const offerSequence = z.number().int().min(0).describe('Sequence of the offer to cancel')
+const credType = z.string().min(1).describe('Credential type, as plain text')
+const credList = z
+  .array(z.object({ issuer: address('Credential issuer r-address'), credType }))
+  .min(1)
+  .describe('The credentials the domain accepts')
+const domainId = z.string().min(1).describe('Permissioned domain ID')
+
 export const createClientVerbTools = (runtime: Runtime) => ({
   clientXrpTransfer: clientWriteTool(runtime, {
     id: 'clientXrpTransfer',
@@ -271,6 +299,118 @@ export const createClientVerbTools = (runtime: Runtime) => ({
     },
     params: ({ authorize, unauthorize }) => ({ authorize, unauthorize }),
   }),
+  clientAccountSetRegularKey: clientWriteTool(runtime, {
+    id: 'clientAccountSetRegularKey',
+    verb: 'account.setRegularKey',
+    description: `Sets the regular key of \`from\`, or removes it when \`regularKey\` is omitted. ${RAW}`,
+    shape: { regularKey: address('Regular key r-address; omit to remove the current one').optional() },
+    params: ({ regularKey }) => ({ regularKey }),
+  }),
+  clientXrpBuyOffer: clientWriteTool(runtime, {
+    id: 'clientXrpBuyOffer',
+    verb: 'xrp.buyOffer',
+    description: '`from` places a DEX offer to buy XRP, paying with an IOU.',
+    shape: { amount: xrpAmount, price: iouPrice.describe('The IOU offered in payment'), ...offerShape },
+    params: offer => offer,
+  }),
+  clientXrpSellOffer: clientWriteTool(runtime, {
+    id: 'clientXrpSellOffer',
+    verb: 'xrp.sellOffer',
+    description: '`from` places a DEX offer to sell XRP for an IOU.',
+    shape: { amount: xrpAmount, price: iouPrice.describe('The IOU wanted in return'), ...offerShape },
+    params: offer => offer,
+  }),
+  clientXrpCancelOffer: clientWriteTool(runtime, {
+    id: 'clientXrpCancelOffer',
+    verb: 'xrp.cancelOffer',
+    description: `\`from\` cancels one of its DEX offers. ${RAW}`,
+    shape: { offerSequence },
+    params: ({ offerSequence }) => ({ offerSequence }),
+  }),
+  clientIouBuyOffer: clientWriteTool(runtime, {
+    id: 'clientIouBuyOffer',
+    verb: 'iou.buyOffer',
+    description:
+      'Places a DEX offer to buy an IOU issued by `from` (simpleXRPL takes the acting account as the IOU issuer), paying with XRP or another IOU.',
+    shape: {
+      ticker,
+      amount: decimal('Amount of the IOU to buy'),
+      price: offerPrice.describe('What is offered in payment'),
+      ...offerShape,
+    },
+    params: offer => offer,
+  }),
+  clientIouSellOffer: clientWriteTool(runtime, {
+    id: 'clientIouSellOffer',
+    verb: 'iou.sellOffer',
+    description:
+      'Places a DEX offer to sell an IOU issued by `from` (simpleXRPL takes the acting account as the IOU issuer), for XRP or another IOU.',
+    shape: {
+      ticker,
+      amount: decimal('Amount of the IOU to sell'),
+      price: offerPrice.describe('What is wanted in return'),
+      ...offerShape,
+    },
+    params: offer => offer,
+  }),
+  clientIouCancelOffer: clientWriteTool(runtime, {
+    id: 'clientIouCancelOffer',
+    verb: 'iou.cancelOffer',
+    description: `\`from\` cancels one of its DEX offers. ${RAW}`,
+    shape: { offerSequence },
+    params: ({ offerSequence }) => ({ offerSequence }),
+  }),
+  clientCredentialIssue: clientWriteTool(runtime, {
+    id: 'clientCredentialIssue',
+    verb: 'credential.issue',
+    description: `The issuer (\`from\`) issues a credential about \`destination\`, which must then accept it. ${RAW}`,
+    shape: {
+      destination: address('Holder r-address the credential is about'),
+      credType,
+      expiration: z.number().int().min(0).optional().describe('Expiration, in seconds since the Ripple epoch'),
+      URI: z.string().optional().describe('URI, as plain text'),
+    },
+    params: ({ destination, credType, expiration, URI }) => ({ destination, credType, expiration, URI }),
+  }),
+  clientCredentialAccept: clientWriteTool(runtime, {
+    id: 'clientCredentialAccept',
+    verb: 'credential.accept',
+    description: `The holder (\`from\`) accepts a credential issued to it. ${RAW}`,
+    shape: { credType, issuer: address('Issuer r-address') },
+    params: ({ credType, issuer }) => ({ credType, issuer }),
+  }),
+  clientCredentialDelete: clientWriteTool(runtime, {
+    id: 'clientCredentialDelete',
+    verb: 'credential.delete',
+    description: `Deletes a credential: as its issuer (\`from\`), name the \`holder\`; as its holder, name the \`issuer\`. ${RAW}`,
+    shape: {
+      credType,
+      holder: address('Holder r-address, when deleting as the issuer').optional(),
+      issuer: address('Issuer r-address, when deleting as the holder').optional(),
+    },
+    params: ({ credType, holder, issuer }) => ({ credType, holder, issuer }),
+  }),
+  clientDomainCreate: clientWriteTool(runtime, {
+    id: 'clientDomainCreate',
+    verb: 'domain.create',
+    description: `\`from\` creates a permissioned domain accepting the listed credentials; the result's \`intent.domainID\` is the new domain. ${RAW}`,
+    shape: { credList },
+    params: ({ credList }) => ({ credList }),
+  }),
+  clientDomainSetCredentials: clientWriteTool(runtime, {
+    id: 'clientDomainSetCredentials',
+    verb: 'domain.setCredentials',
+    description: `The owner (\`from\`) replaces the credentials a permissioned domain accepts. ${RAW}`,
+    shape: { domain: domainId, credList },
+    params: ({ domain, credList }) => ({ domain, credList }),
+  }),
+  clientDomainDelete: clientWriteTool(runtime, {
+    id: 'clientDomainDelete',
+    verb: 'domain.delete',
+    description: `The owner (\`from\`) deletes a permissioned domain. ${RAW}`,
+    shape: { domain: domainId },
+    params: ({ domain }) => ({ domain }),
+  }),
   clientTokenRetrieve: clientReadTool(runtime, {
     id: 'clientTokenRetrieve',
     verb: 'token.retrieve',
@@ -304,6 +444,55 @@ export const createClientVerbTools = (runtime: Runtime) => ({
     verb: 'account.retrieve',
     description: "Returns an account's XRP balance, sequence, owner count and flags.",
     shape: { account: address("r-address; the Environment's primary when omitted").optional() },
+    params: ({ account }) => ({ account }),
+  }),
+  clientAccountListOffers: clientReadTool(runtime, {
+    id: 'clientAccountListOffers',
+    verb: 'account.listOffers',
+    description: "Lists an account's open DEX offers, with the sequence the cancel tools take.",
+    shape: { account: address("r-address; the Environment's primary when omitted").optional() },
+    params: ({ account }) => ({ account }),
+  }),
+  clientIouListOffers: clientReadTool(runtime, {
+    id: 'clientIouListOffers',
+    verb: 'iou.listOffers',
+    description: 'Lists the open DEX offers on both sides of an IOU, tagged buy or sell.',
+    shape: { ticker, issuer: address('Issuer r-address') },
+    params: ({ ticker, issuer }) => ({ ticker, issuer }),
+  }),
+  clientCredentialRetrieve: clientReadTool(runtime, {
+    id: 'clientCredentialRetrieve',
+    verb: 'credential.retrieve',
+    description: 'Returns a credential, with whether its holder has accepted it.',
+    shape: {
+      credType,
+      issuer: address('Issuer r-address'),
+      account: address("Holder r-address; the Environment's primary when omitted").optional(),
+    },
+    params: ({ credType, issuer, account }) => ({ credType, issuer, account }),
+  }),
+  clientCredentialList: clientReadTool(runtime, {
+    id: 'clientCredentialList',
+    verb: 'credential.list',
+    description: 'Lists the credentials an account holds (`role: holder`) or issued (`role: issuer`).',
+    shape: {
+      role: z.enum(['holder', 'issuer']).optional().describe('Default holder'),
+      account: address("r-address; the Environment's primary when omitted").optional(),
+    },
+    params: ({ role, account }) => ({ role, account }),
+  }),
+  clientDomainRetrieve: clientReadTool(runtime, {
+    id: 'clientDomainRetrieve',
+    verb: 'domain.retrieve',
+    description: 'Returns a permissioned domain: its owner and the credentials it accepts.',
+    shape: { domainID: domainId },
+    params: ({ domainID }) => ({ domainID }),
+  }),
+  clientDomainList: clientReadTool(runtime, {
+    id: 'clientDomainList',
+    verb: 'domain.list',
+    description: 'Lists the permissioned domains an account owns.',
+    shape: { account: address("Owner r-address; the Environment's primary when omitted").optional() },
     params: ({ account }) => ({ account }),
   }),
 })
