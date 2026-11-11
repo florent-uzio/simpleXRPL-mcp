@@ -6,7 +6,7 @@ export const createListEnvironments = (runtime: Runtime) =>
   createTool({
     id: 'listEnvironments',
     description:
-      'Lists the configured Environments with their Backend, Access level and whether raw signing is allowed. Never reads a Key reference.',
+      'Lists the configured Environments with their Backend, Access level, whether raw signing is allowed and the XRPL node (`xrpldUrl`) the client verb tools use. Never reads a Key reference.',
     inputSchema: z.object({}),
     execute: async () => {
       const { defaultEnvironment, entries, configError } = await runtime.list()
@@ -21,6 +21,7 @@ export const createListEnvironments = (runtime: Runtime) =>
                 backend: entry.settings.backend,
                 access: entry.settings.access,
                 allowRawSigning: entry.settings.allowRawSigning,
+                xrpldUrl: entry.settings.xrpldUrl ?? null,
               },
         ),
       }

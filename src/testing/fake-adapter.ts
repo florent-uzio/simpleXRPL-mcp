@@ -1,5 +1,7 @@
 import type {
   AccountSummary,
+  ClientWriteOptions,
+  ClientWriteOutcome,
   BatchSigningRequirement,
   Connect,
   CustodyConnection,
@@ -28,12 +30,24 @@ export const createFakeAdapter = () => {
   const dryRuns: NativeOrder[] = []
   const proposals: NativeOrder[] = []
   const issuanceLookups: { intentId: string; domainId: string; timeoutMs?: number }[] = []
+  const clientWrites: { verb: string; params: unknown; options: ClientWriteOptions }[] = []
+  const clientReads: { verb: string; params: unknown }[] = []
+  let closed = 0
   const state = {
     batchSigners: [] as BatchSigningRequirement[],
     issuance: { issuanceId: 'ISSUANCE-1' } as Omit<MptIssuanceIdOutcome, 'intentId'> | Error,
     dryRunResult: { success: true, errors: [], estimatedFeeDrops: '12' } as DryRunResult,
     outcome: { intentId: '', status: 'Executed', isTerminal: true, isSuccess: true, reason: undefined } as
       IntentOutcome | Error,
+    clientWrite: {
+      status: 'done',
+      source: 'custody',
+      intentId: 'intent-c1',
+      txHash: 'HASH1',
+      idempotencyKey: 'key-1',
+      intent: {},
+    } as ClientWriteOutcome,
+    clientRead: { data: 'read' } as unknown,
   }
   let me = fakeMe
   const listCalls: { domainId: string; limit?: number; cursor?: string }[] = []
@@ -65,6 +79,20 @@ export const createFakeAdapter = () => {
         if (state.issuance instanceof Error) throw state.issuance
         return { ...state.issuance, intentId: lookup.intentId }
       },
+      // Like the real Backend, the client exists only with an XRPL node URL.
+      client: connection.xrpldUrl
+        ? async () => ({
+            write: async (verb, params, options) => {
+              clientWrites.push({ verb, params, options })
+              return state.clientWrite
+            },
+            read: async (verb, params) => {
+              clientReads.push({ verb, params })
+              return state.clientRead
+            },
+          })
+        : undefined,
+      close: async () => void closed++,
       waitForIntent: async (intentId, options) => {
         waits.push({ intentId, timeoutMs: options?.timeoutMs })
         if (state.outcome instanceof Error) throw state.outcome
@@ -84,6 +112,9 @@ export const createFakeAdapter = () => {
     proposals,
     waits,
     issuanceLookups,
+    clientWrites,
+    clientReads,
+    closed: () => closed,
     state,
   }
 }

@@ -51,3 +51,7 @@ _Avoid_: Unsafe mode, passthrough
 **Dry run**:
 A Backend's evaluation of an Intent without proposing it, used to catch errors before a Propose.
 _Avoid_: Simulation, validation, preview
+
+**Client verb**:
+A business-intent method of the simpleXRPL client (`client.xrp.transfer`, `client.token.issue`, ...), which builds the transaction and picks the signing path itself: a Native operation where the Backend has one, Raw signing otherwise. The `client*` tools call them; the other write tools send a Native operation order directly.
+_Avoid_: SDK call, client method

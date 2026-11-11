@@ -18,6 +18,7 @@ export const createHarness = async (env: Record<string, string | undefined> = {}
       const result = await server.executeTool(tool, args)
       return (result as { output: unknown }).output
     },
+    closeBackends: () => server.closeBackends(),
     cleanup: () => rm(dir, { recursive: true, force: true }),
   }
 }

@@ -1,4 +1,5 @@
 import type { Runtime } from '../environments/runtime'
+import { createClientVerbTools } from './client-verbs'
 import { createGetMe, createGetMptIssuanceId, createListAccounts, createWaitForIntent } from './custody'
 import { createListEnvironments } from './environments'
 import { createMptAuthorize, createMptIssuanceCreate, createMptIssuanceDestroy, createMptIssuanceSet } from './mpt'
@@ -33,4 +34,5 @@ export const createTools = (runtime: Runtime) => ({
   sponsorshipSetAsSponsee: createSponsorshipSetAsSponsee(runtime),
   dryRunBatch: createDryRunBatch(runtime),
   proposeBatch: createProposeBatch(runtime),
+  ...createClientVerbTools(runtime),
 })

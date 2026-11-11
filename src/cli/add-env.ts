@@ -18,6 +18,8 @@ export type AddEnvFlags = {
   domain?: string
   access?: string
   allowRawSigning?: boolean
+  /** WebSocket URL of an XRPL node, for the client verb tools. */
+  xrpldUrl?: string
   /** Algorithm of a generated key. */
   algorithm?: string
   /** Use this PEM file's key instead of generating one. */
@@ -113,6 +115,9 @@ export const runAddEnv = async ({
     access === 'read'
       ? false
       : (flags.allowRawSigning ?? isYes(await ask('Allow Raw signing, which Custody policies cannot inspect? (y/N)')))
+  const xrpldUrl =
+    (flags.xrpldUrl ?? (await ask('XRPL node WebSocket URL for the client verb tools (Enter for none)'))).trim() ||
+    undefined
 
   const settingsFor = (keyRef: string, domainId?: string) => {
     const parsed = environmentSchema.safeParse({
@@ -124,6 +129,7 @@ export const runAddEnv = async ({
       keyRef,
       access,
       allowRawSigning,
+      xrpldUrl,
     })
     if (!parsed.success) throw new Error(z.prettifyError(parsed.error))
     return parsed.data

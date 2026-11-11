@@ -19,7 +19,7 @@ export const toMemos = (memos?: z.infer<typeof memoSchema>[]) =>
   }))
 
 export const DRY_RUN_THEN_PROPOSE =
-  'Runs a Dry run first and, by default, stops there, returning the fee estimate. With `dryRun: false` it Proposes after a successful Dry run and returns the `intentId` at once; approvers act later. Needs the `propose` Access level and a named Environment.'
+  'Sent through custody.api as a Native operation order (for the simpleXRPL client verbs, use the client* tools). Runs a Dry run first and, by default, stops there, returning the fee estimate. With `dryRun: false` it Proposes after a successful Dry run and returns the `intentId` at once; approvers act later. Needs the `propose` Access level and a named Environment.'
 
 /**
  * Every write: Dry-runs the order, stops there when `dryRun` is set, and otherwise Proposes the same order only if
