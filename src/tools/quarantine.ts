@@ -7,19 +7,18 @@ export const createListQuarantinedTransfers = (runtime: Runtime) =>
   createTool({
     id: 'listQuarantinedTransfers',
     description:
-      "Lists the transfers an account received that Custody still holds in quarantine: until released, they count as unavailable and cannot be spent. Pass the returned ids to releaseQuarantinedTransfers. Uses the Environment's default domain when `domainId` is omitted.",
+      'Lists the transfers an account received that Custody still holds in quarantine: until released, they count as unavailable and cannot be spent. Pass the returned ids to releaseQuarantinedTransfers.',
     inputSchema: z.object({
       account: z.string().describe('r-address of the receiving account, held in the Environment'),
       ledgerId: z.string().optional().describe('Ledger id, only when the address is on several ledgers'),
       environment: z.string().optional().describe('Environment name; the default when omitted'),
-      domainId: z.string().optional().describe("Domain id; the Environment's default domain when omitted"),
     }),
-    execute: ({ account, ledgerId, environment, domainId }) =>
+    execute: ({ account, ledgerId, environment }) =>
       runtime.run({ environment, requires: 'read' }, async backend => ({
         transfers: await backend.listQuarantinedTransfers({
           account,
           ledgerId,
-          domainId: domainId ?? backend.domainId ?? (await onlyDomain(backend)),
+          domainId: backend.domainId ?? (await onlyDomain(backend)),
         }),
       })),
   })
